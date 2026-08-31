@@ -18,12 +18,9 @@ PRODUCT_LINK = os.getenv(
 
 
 def get_trending_pin_ideas(count=3):
-  """Generate unique trending Pinterest pin ideas using Gemini API."""
-  url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-  headers = {"Content-Type": "application/json"}
-
+  """Generate pin ideas dynamically with automatic model fallback."""
   prompt = f"""Generate a JSON array of {count} completely unique, highly trending Pinterest pin ideas.
-Niches: Side Hustles, AI Tools, Productivity, Digital Products, Habit Tracking, Work from Home.
+Niches: Side Hustles, AI Automation, Digital Marketing, Passive Income, Productivity.
 Timestamp seed: {time.time()}
 
 Return ONLY a valid JSON array of objects with this schema:
@@ -37,33 +34,86 @@ Return ONLY a valid JSON array of objects with this schema:
 ]"""
 
   payload = {"contents": [{"parts": [{"text": prompt}]}]}
+  headers = {"Content-Type": "application/json"}
 
+  # Try to list available models for your API key
+  candidate_models = []
   try:
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    # Fallback to v1beta if needed
-    if response.status_code == 404:
-      url_beta = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}"
-      response = requests.post(
-          url_beta, headers=headers, json=payload, timeout=30
-      )
-
-    response.raise_for_status()
-    data = response.json()
-    raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-
-    if raw_text.startswith("```json"):
-      raw_text = raw_text[7:]
-    if raw_text.startswith("```"):
-      raw_text = raw_text[3:]
-    if raw_text.endswith("```"):
-      raw_text = raw_text[:-3]
-
-    return json.loads(raw_text.strip())
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+    list_res = requests.get(list_url, timeout=10)
+    if list_res.status_code == 200:
+      models_data = list_res.json().get("models", [])
+      for m in models_data:
+        if "generateContent" in m.get("supportedGenerationMethods", []):
+          candidate_models.append(m["name"].replace("models/", ""))
   except Exception as e:
-    print(f"Error generating content from Gemini: {e}")
-    if "response" in locals() and hasattr(response, "text"):
-      print(f"Response body: {response.text}")
-    return []
+    print(f"Could not fetch model list: {e}")
+
+  # Fallback default models if list empty
+  if not candidate_models:
+    candidate_models = [
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-pro",
+        "gemini-1.0-pro",
+    ]
+
+  for model_name in candidate_models:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+    try:
+      response = requests.post(url, headers=headers, json=payload, timeout=20)
+      if response.status_code == 200:
+        raw_text = (
+            response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            .strip()
+        )
+        if raw_text.startswith("```json"):
+          raw_text = raw_text[7:]
+        if raw_text.startswith("```"):
+          raw_text = raw_text[3:]
+        if raw_text.endswith("```"):
+          raw_text = raw_text[:-3]
+        print(f"✅ Successfully generated pins using model: {model_name}")
+        return json.loads(raw_text.strip())
+    except Exception:
+      continue
+
+  # Fallback pre-crafted pins if API completely fails
+  print("⚠️ Using pre-crafted fallback pin ideas to ensure 24/7 delivery...")
+  backup_ideas = [
+      {
+          "title": "How to Build a $1,000/Month AI Side Hustle",
+          "description": (
+              "Discover how simple AI tools can help you generate passive"
+              " income starting today! Check the link in bio to learn"
+              " more. #SideHustle #AIAutomation #PassiveIncome"
+          ),
+          "pexels_search": "laptop workspace coffee aesthetic",
+          "board_name": "Side Hustles",
+      },
+      {
+          "title": "Top 5 Digital Products You Can Sell on Gumroad",
+          "description": (
+              "Create once, sell forever. Here are the best high-margin digital"
+              " products to sell online effortlessly. #DigitalProducts #Gumroad"
+              " #MakeMoneyOnline"
+          ),
+          "pexels_search": "minimalist modern desk",
+          "board_name": "Side Hustles",
+      },
+      {
+          "title": "Automate Your Business: No-Code Automation Guide",
+          "description": (
+              "Save 20+ hours every week using smart automations and GitHub"
+              " workflows. Get the full system below! #Productivity #NoCode"
+              " #WorkSmart"
+          ),
+          "pexels_search": "coding developer workstation",
+          "board_name": "Side Hustles",
+      },
+  ]
+  random.shuffle(backup_ideas)
+  return backup_ideas[:count]
 
 
 def get_pexels_image(query):
@@ -77,8 +127,7 @@ def get_pexels_image(query):
     data = response.json()
     photos = data.get("photos", [])
     if photos:
-      photo = random.choice(photos)
-      return photo["src"]["large2x"]
+      return random.choice(photos)["src"]["large2x"]
   except Exception as e:
     print(f"Error fetching image from Pexels: {e}")
   return None
@@ -114,7 +163,6 @@ def publish_pin_to_pinterest(title, description, image_url, link):
 def send_whatsapp_notification(title, pin_url):
   """Send notification to WhatsApp using Green-API."""
   if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
-    print("WhatsApp credentials not set, skipping notification.")
     return
 
   url = f"[https://api.green-api.com/waInstance](https://api.green-api.com/waInstance){GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
@@ -141,10 +189,6 @@ def send_whatsapp_notification(title, pin_url):
 def main():
   print("Starting automated Pinterest workflow...")
   pins = get_trending_pin_ideas(count=3)
-
-  if not pins:
-    print("No pins generated. Exiting.")
-    return
 
   print(f"Generated {len(pins)} ideas. Publishing...")
 
