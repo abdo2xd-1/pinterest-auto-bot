@@ -36,7 +36,6 @@ Return ONLY a valid JSON array of objects with this schema:
   payload = {"contents": [{"parts": [{"text": prompt}]}]}
   headers = {"Content-Type": "application/json"}
 
-  # Try to list available models for your API key
   candidate_models = []
   try:
     list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
@@ -49,14 +48,8 @@ Return ONLY a valid JSON array of objects with this schema:
   except Exception as e:
     print(f"Could not fetch model list: {e}")
 
-  # Fallback default models if list empty
   if not candidate_models:
-    candidate_models = [
-        "gemini-2.5-flash",
-        "gemini-1.5-pro",
-        "gemini-pro",
-        "gemini-1.0-pro",
-    ]
+    candidate_models = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-pro"]
 
   for model_name in candidate_models:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
@@ -78,37 +71,24 @@ Return ONLY a valid JSON array of objects with this schema:
     except Exception:
       continue
 
-  # Fallback pre-crafted pins if API completely fails
-  print("⚠️ Using pre-crafted fallback pin ideas to ensure 24/7 delivery...")
   backup_ideas = [
       {
           "title": "How to Build a $1,000/Month AI Side Hustle",
           "description": (
               "Discover how simple AI tools can help you generate passive"
-              " income starting today! Check the link in bio to learn"
-              " more. #SideHustle #AIAutomation #PassiveIncome"
+              " income starting today! Check the link to learn more."
+              " #SideHustle #AIAutomation #PassiveIncome"
           ),
-          "pexels_search": "laptop workspace coffee aesthetic",
+          "pexels_search": "laptop coffee aesthetic",
           "board_name": "Side Hustles",
       },
       {
           "title": "Top 5 Digital Products You Can Sell on Gumroad",
           "description": (
-              "Create once, sell forever. Here are the best high-margin digital"
-              " products to sell online effortlessly. #DigitalProducts #Gumroad"
-              " #MakeMoneyOnline"
+              "Create once, sell forever. Here are high-margin digital products"
+              " to sell online. #DigitalProducts #Gumroad #MakeMoneyOnline"
           ),
-          "pexels_search": "minimalist modern desk",
-          "board_name": "Side Hustles",
-      },
-      {
-          "title": "Automate Your Business: No-Code Automation Guide",
-          "description": (
-              "Save 20+ hours every week using smart automations and GitHub"
-              " workflows. Get the full system below! #Productivity #NoCode"
-              " #WorkSmart"
-          ),
-          "pexels_search": "coding developer workstation",
+          "pexels_search": "minimalist desk setup",
           "board_name": "Side Hustles",
       },
   ]
@@ -117,12 +97,16 @@ Return ONLY a valid JSON array of objects with this schema:
 
 
 def get_pexels_image(query):
-  """Fetch a high-quality vertical image from Pexels API."""
-  url = f"[https://api.pexels.com/v1/search?query=](https://api.pexels.com/v1/search?query=){query}&orientation=portrait&per_page=5"
+  """Fetch a high-quality vertical image from Pexels API cleanly."""
+  clean_query = (
+      str(query).replace("[", "").replace("]", "").replace("`", "").strip()
+  )
+  url = "[https://api.pexels.com/v1/search](https://api.pexels.com/v1/search)"
+  params = {"query": clean_query, "orientation": "portrait", "per_page": 5}
   headers = {"Authorization": PEXELS_API_KEY}
 
   try:
-    response = requests.get(url, headers=headers, timeout=20)
+    response = requests.get(url, headers=headers, params=params, timeout=20)
     response.raise_for_status()
     data = response.json()
     photos = data.get("photos", [])
@@ -144,7 +128,7 @@ def publish_pin_to_pinterest(title, description, image_url, link):
   payload = {
       "title": title,
       "description": description,
-      "board_id": PINTEREST_BOARD_ID,
+      "board_id": str(PINTEREST_BOARD_ID),
       "link": link,
       "media_source": {"source_type": "image_url", "url": image_url},
   }
@@ -170,7 +154,7 @@ def send_whatsapp_notification(title, pin_url):
 
   chat_id = (
       f"{WHATSAPP_PHONE}@c.us"
-      if "@" not in WHATSAPP_PHONE
+      if "@" not in str(WHATSAPP_PHONE)
       else WHATSAPP_PHONE
   )
   msg = (
