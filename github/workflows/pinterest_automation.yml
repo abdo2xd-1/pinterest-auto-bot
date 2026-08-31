@@ -1,1 +1,36 @@
+name: Pinterest Auto Publisher
 
+on:
+  schedule:
+    # يعمل تلقائياً كل 30 دقيقة
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # يتيح لك تشغيله يدوياً في أي وقت من زر Run workflow
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Auto Publisher
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
+          PINTEREST_BOARD_ID: ${{ secrets.PINTEREST_BOARD_ID }}
+          GREEN_API_INSTANCE_ID: ${{ secrets.GREEN_API_INSTANCE_ID }}
+          GREEN_API_API_TOKEN: ${{ secrets.GREEN_API_API_TOKEN }}
+          WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
+          PRODUCT_LINK: ${{ secrets.PRODUCT_LINK }}
+        run: |
+          python main.py
