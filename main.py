@@ -7,7 +7,7 @@ import requests
 # Load environment variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-PINTEREST_ACCESS_TOKEN = os.getenv("PINTEREST_ACCESS_TOKEN")
+PINTEREST_SESS = os.getenv("PINTEREST_SESSION_COOKIE")
 PINTEREST_BOARD_ID = os.getenv("PINTEREST_BOARD_ID")
 GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
 GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
@@ -17,8 +17,8 @@ PRODUCT_LINK = os.getenv(
 )
 
 
-def get_trending_pin_ideas(count=3):
-  """Generate pin ideas dynamically with automatic model fallback."""
+def get_trending_pin_ideas(count=2):
+  """Dynamic content ideas generation."""
   prompt = f"""Generate a JSON array of {count} completely unique, highly trending Pinterest pin ideas.
 Niches: Side Hustles, AI Automation, Digital Marketing, Passive Income, Productivity.
 Timestamp seed: {time.time()}
@@ -35,23 +35,10 @@ Return ONLY a valid JSON array of objects with this schema:
 
   payload = {"contents": [{"parts": [{"text": prompt}]}]}
   headers = {"Content-Type": "application/json"}
-
-  # Try available Gemini models
-  candidate_models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro"]
+  candidate_models = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-pro"]
 
   for model_name in candidate_models:
-    url = (
-        "https:"
-        + chr(47)
-        + chr(47)
-        + "generativelanguage.googleapis.com"
-        + chr(47)
-        + "v1beta"
-        + chr(47)
-        + "models"
-        + chr(47)
-        + f"{model_name}:generateContent?key={GEMINI_API_KEY}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     try:
       response = requests.post(url, headers=headers, json=payload, timeout=20)
       if response.status_code == 200:
@@ -65,7 +52,7 @@ Return ONLY a valid JSON array of objects with this schema:
           raw_text = raw_text[3:]
         if raw_text.endswith("```"):
           raw_text = raw_text[:-3]
-        print(f"✅ Successfully generated pins using model: {model_name}")
+        print(f"✅ Generated ideas using model: {model_name}")
         return json.loads(raw_text.strip())
     except Exception:
       continue
@@ -79,7 +66,6 @@ Return ONLY a valid JSON array of objects with this schema:
               " income starting today! #SideHustle #AIAutomation #PassiveIncome"
           ),
           "pexels_search": "laptop coffee aesthetic",
-          "board_name": "Side Hustles",
       },
       {
           "title": "Top 5 Digital Products You Can Sell on Gumroad",
@@ -88,7 +74,6 @@ Return ONLY a valid JSON array of objects with this schema:
               " to sell online. #DigitalProducts #Gumroad #MakeMoneyOnline"
           ),
           "pexels_search": "minimalist desk setup",
-          "board_name": "Side Hustles",
       },
   ]
   random.shuffle(backup_ideas)
@@ -96,141 +81,129 @@ Return ONLY a valid JSON array of objects with this schema:
 
 
 def get_pexels_image(query):
-  """Fetch a high-quality vertical image from Pexels API cleanly."""
-  # Building the base URL cleanly without markdown injection
-  base_url = (
-      "https:"
-      + chr(47)
-      + chr(47)
-      + "api.pexels.com"
-      + chr(47)
-      + "v1"
-      + chr(47)
-      + "search"
-  )
+  """Fetch image asset cleanly from Pexels API."""
+  url = "[https://api.pexels.com/v1/search](https://api.pexels.com/v1/search)"
   headers = {"Authorization": str(PEXELS_API_KEY).strip()}
   params = {"query": str(query).strip(), "orientation": "portrait", "per_page": 5}
 
   try:
-    response = requests.get(
-        base_url, headers=headers, params=params, timeout=20
-    )
-    response.raise_for_status()
-    data = response.json()
-    photos = data.get("photos", [])
+    res = requests.get(url, headers=headers, params=params, timeout=20)
+    res.raise_for_status()
+    photos = res.json().get("photos", [])
     if photos:
       return random.choice(photos)["src"]["large2x"]
   except Exception as e:
-    print(f"Error fetching image from Pexels: {e}")
+    print(f"Pexels fetch error: {e}")
   return None
 
 
-def publish_pin_to_pinterest(title, description, image_url, link):
-  """Publish a Pin to Pinterest via Pinterest API v5."""
-  url = (
-      "https:"
-      + chr(47)
-      + chr(47)
-      + "api.pinterest.com"
-      + chr(47)
-      + "v5"
-      + chr(47)
-      + "pins"
-  )
+def create_pin_via_session(title, description, image_url, link):
+  """Publish Pin directly via Web Session Cookie endpoint."""
+  if not PINTEREST_SESS:
+    print("❌ Error: PINTEREST_SESSION_COOKIE is missing in secrets.")
+    return None
+
+  session = requests.Session()
+  clean_cookie = PINTEREST_SESS.strip().strip('"').strip("'")
+  session.cookies.set("_pinterest_sess", clean_cookie, domain=".pinterest.com")
+
   headers = {
-      "Authorization": f"Bearer {PINTEREST_ACCESS_TOKEN}".strip(),
-      "Content-Type": "application/json",
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
+          " like Gecko) Chrome/124.0.0.0 Safari/537.36"
+      ),
+      "Referer": "[https://www.pinterest.com/pin-builder/](https://www.pinterest.com/pin-builder/)",
+      "X-Requested-With": "XMLHttpRequest",
+      "Accept": "application/json, text/javascript, */*; q=0.01",
   }
 
   payload = {
-      "title": str(title),
-      "description": str(description),
-      "board_id": str(PINTEREST_BOARD_ID).strip(),
-      "link": str(link).strip(),
-      "media_source": {"source_type": "image_url", "url": str(image_url)},
+      "source_url": "/pin-builder/",
+      "data": json.dumps({
+          "options": {
+              "board_id": str(PINTEREST_BOARD_ID).strip(),
+              "image_url": str(image_url).strip(),
+              "title": str(title).strip(),
+              "description": str(description).strip(),
+              "link": str(link).strip(),
+              "scrape_metric": {"source": "pinner_upload"},
+          },
+          "context": {},
+      }),
   }
 
+  endpoint = "[https://www.pinterest.com/resource/PinResource/create/](https://www.pinterest.com/resource/PinResource/create/)"
+
   try:
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()
+    res = session.post(endpoint, data=payload, headers=headers, timeout=25)
+    data = res.json()
+    if res.status_code == 200 and "resource_response" in data:
+      status = data.get("resource_response", {}).get("status")
+      if status == "success":
+        pin_id = data["resource_response"]["data"]["id"]
+        return pin_id
+      else:
+        print(f"Pinterest error response: {data}")
+    else:
+      print(f"Session request failed: {res.status_code} - {res.text}")
   except Exception as e:
-    print(f"Error publishing to Pinterest: {e}")
-    if "response" in locals() and hasattr(response, "text"):
-      print(f"Response: {response.text}")
-    return None
+    print(f"Network error on Pinterest session: {e}")
+
+  return None
 
 
-def send_whatsapp_notification(title, pin_url):
-  """Send notification to WhatsApp using Green-API."""
+def send_whatsapp_notification(title, pin_id):
+  """Send status alert via Green-API."""
   if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
     return
 
-  url = (
-      "https:"
-      + chr(47)
-      + chr(47)
-      + "api.green-api.com"
-      + chr(47)
-      + f"waInstance{GREEN_API_INSTANCE_ID}"
-      + chr(47)
-      + "sendMessage"
-      + chr(47)
-      + f"{GREEN_API_API_TOKEN}"
-  )
+  url = f"[https://api.green-api.com/waInstance](https://api.green-api.com/waInstance){GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
   headers = {"Content-Type": "application/json"}
-
   chat_id = (
       f"{WHATSAPP_PHONE}@c.us"
       if "@" not in str(WHATSAPP_PHONE)
       else str(WHATSAPP_PHONE)
   )
+  pin_link = (
+      f"[https://www.pinterest.com/pin/](https://www.pinterest.com/pin/){pin_id}/" if pin_id else "Uploaded"
+  )
+
   msg = (
-      f"🚀 *تم نشر دبوس جديد بنجاح!*\n\n📌 *العنوان:* {title}\n🔗 *الرابط:*"
-      f" {pin_url}\n💰 *رابط المنتج:* {PRODUCT_LINK}"
+      f"🚀 *تم نشر دبوس تلقائياً بنجاح!*\n\n📌 *العنوان:* {title}\n🔗 *رابط"
+      f" البن:* {pin_link}\n💰 *المنتج:* {PRODUCT_LINK}"
   )
 
   payload = {"chatId": chat_id, "message": msg}
 
   try:
-    requests.post(url, headers=headers, json=payload, timeout=20)
+    requests.post(url, headers=headers, json=payload, timeout=15)
   except Exception as e:
-    print(f"Error sending WhatsApp message: {e}")
+    print(f"WhatsApp notice failed: {e}")
 
 
 def main():
-  print("Starting automated Pinterest workflow...")
-  pins = get_trending_pin_ideas(count=3)
+  print("Starting Pinterest Session Publisher...")
+  pins = get_trending_pin_ideas(count=1)
 
-  print(f"Generated {len(pins)} ideas. Publishing...")
+  for idx, item in enumerate(pins, 1):
+    title = item.get("title")
+    desc = item.get("description")
+    search = item.get("pexels_search", "side hustle ideas")
 
-  for idx, pin_data in enumerate(pins, 1):
-    title = pin_data.get("title")
-    description = pin_data.get("description")
-    search_query = pin_data.get("pexels_search", "side hustle ideas")
-
-    print(f"\n[{idx}/{len(pins)}] Fetching image for: {search_query}")
-    image_url = get_pexels_image(search_query)
-
-    if not image_url:
-      print("Failed to get image, skipping...")
+    print(f"\nFetching image for: {search}...")
+    img = get_pexels_image(search)
+    if not img:
+      print("No image found, skipping.")
       continue
 
     print(f"Publishing Pin: '{title}'...")
-    res = publish_pin_to_pinterest(title, description, image_url, PRODUCT_LINK)
+    pin_id = create_pin_via_session(title, desc, img, PRODUCT_LINK)
 
-    if res:
-      pin_id = res.get("id", "")
-      pin_url = (
-          f"[https://www.pinterest.com/pin/](https://www.pinterest.com/pin/){pin_id}/" if pin_id else "Created"
-      )
-      print(f"✅ Success! Pin ID: {pin_id}")
-      send_whatsapp_notification(title, pin_url)
+    if pin_id:
+      print(f"✅ Published successfully via Session! Pin ID: {pin_id}")
+      send_whatsapp_notification(title, pin_id)
     else:
-      print("❌ Failed to publish pin.")
-
-    if idx < len(pins):
-      time.sleep(15)
+      print("❌ Failed to publish pin via session.")
 
 
 if __name__ == "__main__":
