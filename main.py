@@ -4,7 +4,7 @@ import random
 import time
 import requests
 
-# Load environment variables
+# Secrets & Environment Variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PINTEREST_SESS = os.getenv("PINTEREST_SESSION_COOKIE")
@@ -15,7 +15,7 @@ GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE")
 PRODUCT_LINK = os.getenv("PRODUCT_LINK", "https://aahmedalmno.gumroad.com/l/gmvtlk")
 
-# Safe, object-only search queries (strictly no people, no females, clean tech aesthetic)
+# Safe queries: Strictly objects, hardware, workspaces, no people/models
 SAFE_OBJECT_SEARCH_TERMS = [
     "minimalist desk laptop dark screen",
     "developer monitor code terminal",
@@ -31,12 +31,12 @@ SAFE_OBJECT_SEARCH_TERMS = [
 
 FORBIDDEN_WORDS = [
     "woman", "girl", "female", "model", "lady", "person", "portrait",
-    "bikini", "lingerie", "sexy", "body", "people", "couple", "face"
+    "bikini", "lingerie", "sexy", "body", "people", "couple", "face", "man"
 ]
 
 def get_trending_pin_ideas(count=1):
-    """Dynamic generator with pure productivity and financial topics."""
-    prompt = f"""Generate a JSON array of {count} completely unique, highly engaging Pinterest pin ideas.
+    """Generate professional side hustle & digital product pin topics."""
+    prompt = f"""Generate a JSON array of {count} completely unique Pinterest pin ideas.
 Niche: Digital Products, AI Automation, Side Hustles, Passive Income, Productivity.
 Seed: {time.time()}
 
@@ -44,8 +44,8 @@ Return ONLY a valid JSON array of objects with this schema:
 [
   {{
     "title": "Short Catchy Click-Worthy Title",
-    "description": "Engaging 2-sentence description with 3 hashtags",
-    "pexels_search": "safe tech keyword without people"
+    "description": "Engaging description with 3 hashtags",
+    "pexels_search": "safe tech workspace keyword without people"
   }}
 ]"""
 
@@ -70,7 +70,6 @@ Return ONLY a valid JSON array of objects with this schema:
             except Exception:
                 continue
 
-    # Fallback library if Gemini key is busy or rate-limited
     safe_templates = [
         ("Top 5 Digital Products to Sell Automatically", "Build recurring passive income streams without inventory. Click the link to start today! #PassiveIncome #Gumroad #DigitalProducts"),
         ("How to Automate Workflows Using Python Scripts", "Save 10+ hours weekly with intelligent background automation. Learn more inside! #Automation #Python #Developer"),
@@ -86,11 +85,10 @@ Return ONLY a valid JSON array of objects with this schema:
     }]
 
 def get_clean_pexels_image(query):
-    """Fetch strictly non-human, safe workspace and tech imagery."""
+    """Clean Pexels API image retrieval without human or sensitive content."""
     url = "[https://api.pexels.com/v1/search](https://api.pexels.com/v1/search)"
     headers = {"Authorization": str(PEXELS_API_KEY).strip()}
     
-    # Force clean keyword query
     clean_query = f"{query} -woman -girl -people -person"
     params = {"query": clean_query, "orientation": "portrait", "per_page": 10}
 
@@ -99,7 +97,6 @@ def get_clean_pexels_image(query):
         res.raise_for_status()
         photos = res.json().get("photos", [])
         
-        # Rigorous filtering
         valid_photos = []
         for photo in photos:
             alt_text = photo.get("alt", "").lower()
@@ -109,17 +106,16 @@ def get_clean_pexels_image(query):
         if valid_photos:
             return random.choice(valid_photos)
         elif photos:
-            # If alt texts don't specify, pick the first tech shot
             return photos[0]["src"]["large2x"]
     except Exception as e:
-        print(f"Pexels error: {e}")
+        print(f"Pexels fetch error: {e}")
 
     return None
 
 def create_pin_via_session(title, description, image_url, link):
-    """Publish Pin directly via authenticated session."""
+    """Direct session upload using Pinterest Web API."""
     if not PINTEREST_SESS:
-        print("❌ Error: PINTEREST_SESSION_COOKIE is missing.")
+        print("❌ Error: PINTEREST_SESSION_COOKIE is missing in secrets.")
         return None
 
     sess_cookie = PINTEREST_SESS.strip().strip('"').strip("'")
@@ -180,61 +176,27 @@ def create_pin_via_session(title, description, image_url, link):
         if res.status_code == 200 and "resource_response" in res_json:
             if res_json.get("resource_response", {}).get("status") == "success":
                 return res_json["resource_response"]["data"]["id"]
-        print(f"Pinterest response failure: {res_json}")
+        print(f"Pinterest error response: {res_json}")
     except Exception as e:
         print(f"Network error on session: {e}")
 
     return None
 
 def send_whatsapp_notification(title, pin_id):
-    """WhatsApp dispatch notice."""
+    """Send immediate dispatch confirmation via Green-API."""
     if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
         return
 
     url = f"[https://api.green-api.com/waInstance](https://api.green-api.com/waInstance){GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
-    headers = {"Content-Type": "application/json"}
     chat_id = f"{WHATSAPP_PHONE}@c.us" if "@" not in str(WHATSAPP_PHONE) else str(WHATSAPP_PHONE)
     pin_link = f"[https://www.pinterest.com/pin/](https://www.pinterest.com/pin/){pin_id}/"
 
     msg = (
-        f"🚀 *تم نشر دبوس جديد تلقائياً!*\n\n"
+        f"🚀 *تم نشر دبوس تلقائياً بنجاح!*\n\n"
         f"📌 *العنوان:* {title}\n"
-        f"🔗 *الرابط:* {pin_link}\n"
+        f"🔗 *رابط البن:* {pin_link}\n"
         f"💰 *المنتج:* {PRODUCT_LINK}"
     )
 
     try:
-        requests.post(url, headers=headers, json={"chatId": chat_id, "message": msg}, timeout=15)
-    except Exception:
-        pass
-
-def main():
-    print("Starting Clean Automation Pipeline (Safe Objects Only)...")
-    pins = get_trending_pin_ideas(count=1)
-
-    for item in pins:
-        title = item.get("title")
-        desc = item.get("description")
-        search = item.get("pexels_search") or random.choice(SAFE_OBJECT_SEARCH_TERMS)
-
-        print(f"Searching clean visual for: {search}...")
-        img = get_clean_pexels_image(search)
-        if not img:
-            print("No matching safe image found, falling back to default tech setup.")
-            img = get_clean_pexels_image("laptop coffee desk")
-
-        if not img:
-            print("Skipping pin due to missing image asset.")
-            continue
-
-        print(f"Publishing Pin: '{title}'...")
-        pin_id = create_pin_via_session(title, desc, img, PRODUCT_LINK)
-
-        if pin_id:
-            print(f"✅ Published successfully! Pin ID: {pin_id}")
-            send_whatsapp_notification(title, pin_id)
-        else:
-            print("❌ Failed to publish pin via session.")
-
-if __name__ == "__main__":
-    main()
+        requests.post(url, headers={"Content-Type": "application/json"}, json={"chatId
