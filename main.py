@@ -17,47 +17,7 @@ PRODUCT_LINK = os.getenv(
 )
 
 
-def get_trending_pin_ideas(count=2):
-  """Dynamic content ideas generation."""
-  prompt = f"""Generate a JSON array of {count} completely unique, highly trending Pinterest pin ideas.
-Niches: Side Hustles, AI Automation, Digital Marketing, Passive Income, Productivity.
-Timestamp seed: {time.time()}
-
-Return ONLY a valid JSON array of objects with this schema:
-[
-  {{
-    "title": "SEO Optimized Catchy Pin Title",
-    "description": "Engaging description with 3 hashtags and a CTA",
-    "pexels_search": "high quality visual keywords",
-    "board_name": "Side Hustles"
-  }}
-]"""
-
-  payload = {"contents": [{"parts": [{"text": prompt}]}]}
-  headers = {"Content-Type": "application/json"}
-  candidate_models = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-pro"]
-
-  for model_name in candidate_models:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
-    try:
-      response = requests.post(url, headers=headers, json=payload, timeout=20)
-      if response.status_code == 200:
-        raw_text = (
-            response.json()["candidates"][0]["content"]["parts"][0]["text"]
-            .strip()
-        )
-        if raw_text.startswith("```json"):
-          raw_text = raw_text[7:]
-        if raw_text.startswith("```"):
-          raw_text = raw_text[3:]
-        if raw_text.endswith("```"):
-          raw_text = raw_text[:-3]
-        print(f"✅ Generated ideas using model: {model_name}")
-        return json.loads(raw_text.strip())
-    except Exception:
-      continue
-
-  print("⚠️ Using fallback pin ideas...")
+def get_trending_pin_ideas(count=1):
   backup_ideas = [
       {
           "title": "How to Build a $1,000/Month AI Side Hustle",
@@ -81,8 +41,7 @@ Return ONLY a valid JSON array of objects with this schema:
 
 
 def get_pexels_image(query):
-  """Fetch image asset cleanly from Pexels API."""
-  url = "[https://api.pexels.com/v1/search](https://api.pexels.com/v1/search)"
+  url = "https://api.pexels.com/v1/search"
   headers = {"Authorization": str(PEXELS_API_KEY).strip()}
   params = {"query": str(query).strip(), "orientation": "portrait", "per_page": 5}
 
@@ -98,7 +57,6 @@ def get_pexels_image(query):
 
 
 def create_pin_via_session(title, description, image_url, link):
-  """Publish Pin directly via Web Session Cookie endpoint."""
   if not PINTEREST_SESS:
     print("❌ Error: PINTEREST_SESSION_COOKIE is missing in secrets.")
     return None
@@ -112,7 +70,7 @@ def create_pin_via_session(title, description, image_url, link):
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
           " like Gecko) Chrome/124.0.0.0 Safari/537.36"
       ),
-      "Referer": "[https://www.pinterest.com/pin-builder/](https://www.pinterest.com/pin-builder/)",
+      "Referer": "https://www.pinterest.com/pin-builder/",
       "X-Requested-With": "XMLHttpRequest",
       "Accept": "application/json, text/javascript, */*; q=0.01",
   }
@@ -132,7 +90,7 @@ def create_pin_via_session(title, description, image_url, link):
       }),
   }
 
-  endpoint = "[https://www.pinterest.com/resource/PinResource/create/](https://www.pinterest.com/resource/PinResource/create/)"
+  endpoint = "https://www.pinterest.com/resource/PinResource/create/"
 
   try:
     res = session.post(endpoint, data=payload, headers=headers, timeout=25)
@@ -153,11 +111,10 @@ def create_pin_via_session(title, description, image_url, link):
 
 
 def send_whatsapp_notification(title, pin_id):
-  """Send status alert via Green-API."""
   if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
     return
 
-  url = f"[https://api.green-api.com/waInstance](https://api.green-api.com/waInstance){GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
+  url = f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
   headers = {"Content-Type": "application/json"}
   chat_id = (
       f"{WHATSAPP_PHONE}@c.us"
@@ -165,7 +122,7 @@ def send_whatsapp_notification(title, pin_id):
       else str(WHATSAPP_PHONE)
   )
   pin_link = (
-      f"[https://www.pinterest.com/pin/](https://www.pinterest.com/pin/){pin_id}/" if pin_id else "Uploaded"
+      f"https://www.pinterest.com/pin/{pin_id}/" if pin_id else "Uploaded"
   )
 
   msg = (
@@ -182,15 +139,15 @@ def send_whatsapp_notification(title, pin_id):
 
 
 def main():
-  print("Starting Pinterest Session Publisher...")
+  print("Starting Pinterest Session Publisher (V2 Direct)...")
   pins = get_trending_pin_ideas(count=1)
 
-  for idx, item in enumerate(pins, 1):
+  for item in pins:
     title = item.get("title")
     desc = item.get("description")
     search = item.get("pexels_search", "side hustle ideas")
 
-    print(f"\nFetching image for: {search}...")
+    print(f"Fetching image for: {search}...")
     img = get_pexels_image(search)
     if not img:
       print("No image found, skipping.")
