@@ -32,4 +32,5 @@ jobs:
           GREEN_API_API_TOKEN: ${{ secrets.GREEN_API_API_TOKEN }}
           WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
           PRODUCT_LINK: ${{ secrets.PRODUCT_LINK }}
+          PINTEREST_CSRF_TOKEN: ${{ secrets.PINTEREST_CSRF_TOKEN }}
         run: python main.py
