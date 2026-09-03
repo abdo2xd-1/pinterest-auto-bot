@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import time
 import requests
 
 # Load environment variables
@@ -14,63 +15,126 @@ GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE")
 PRODUCT_LINK = os.getenv("PRODUCT_LINK", "https://aahmedalmno.gumroad.com/l/gmvtlk")
 
+# Safe, object-only search queries (strictly no people, no females, clean tech aesthetic)
+SAFE_OBJECT_SEARCH_TERMS = [
+    "minimalist desk laptop dark screen",
+    "developer monitor code terminal",
+    "crypto trading charts screen setup",
+    "financial growth stock market graph",
+    "modern minimalist home office desk setup",
+    "notebook pen coffee productivity desk",
+    "clean macbook dark aesthetic workspace",
+    "server room led technology hardware",
+    "business charts paperwork fountain pen",
+    "mechanical keyboard clean desk setup"
+]
+
+FORBIDDEN_WORDS = [
+    "woman", "girl", "female", "model", "lady", "person", "portrait",
+    "bikini", "lingerie", "sexy", "body", "people", "couple", "face"
+]
 
 def get_trending_pin_ideas(count=1):
-    """Fallback pin ideas for reliable execution."""
-    backup_ideas = [
-        {
-            "title": "Top 5 Digital Products You Can Sell on Gumroad",
-            "description": "Create once, sell forever. Here are high-margin digital products to sell online. #DigitalProducts #Gumroad #MakeMoneyOnline #SideHustle",
-            "pexels_search": "minimalist desk setup"
-        },
-        {
-            "title": "How to Build a $1,000/Month AI Side Hustle",
-            "description": "Discover how simple AI tools can help you generate passive income starting today! #SideHustle #AIAutomation #PassiveIncome",
-            "pexels_search": "laptop coffee aesthetic"
-        }
+    """Dynamic generator with pure productivity and financial topics."""
+    prompt = f"""Generate a JSON array of {count} completely unique, highly engaging Pinterest pin ideas.
+Niche: Digital Products, AI Automation, Side Hustles, Passive Income, Productivity.
+Seed: {time.time()}
+
+Return ONLY a valid JSON array of objects with this schema:
+[
+  {{
+    "title": "Short Catchy Click-Worthy Title",
+    "description": "Engaging 2-sentence description with 3 hashtags",
+    "pexels_search": "safe tech keyword without people"
+  }}
+]"""
+
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    headers = {"Content-Type": "application/json"}
+    candidate_models = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-pro"]
+
+    if GEMINI_API_KEY:
+        for model_name in candidate_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=15)
+                if response.status_code == 200:
+                    raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    if raw_text.startswith("```json"):
+                        raw_text = raw_text[7:]
+                    if raw_text.startswith("```"):
+                        raw_text = raw_text[3:]
+                    if raw_text.endswith("```"):
+                        raw_text = raw_text[:-3]
+                    return json.loads(raw_text.strip())
+            except Exception:
+                continue
+
+    # Fallback library if Gemini key is busy or rate-limited
+    safe_templates = [
+        ("Top 5 Digital Products to Sell Automatically", "Build recurring passive income streams without inventory. Click the link to start today! #PassiveIncome #Gumroad #DigitalProducts"),
+        ("How to Automate Workflows Using Python Scripts", "Save 10+ hours weekly with intelligent background automation. Learn more inside! #Automation #Python #Developer"),
+        ("Build a $1,000/Month Digital Asset Portfolio", "Step-by-step framework to launch high-margin downloadable assets online. #SideHustle #OnlineBusiness #PassiveRevenue"),
+        ("Best Productivity Tools for Solopreneurs in 2026", "Scale your online venture effortlessly with minimal software overhead. #Productivity #NoCode #TechTools"),
+        ("The Complete Gumroad Sales Blueprint", "A simple roadmap to drive targeted organic traffic and close sales on autopilot. #Marketing #ECommerce #SalesFunnel")
     ]
-    random.shuffle(backup_ideas)
-    return backup_ideas[:count]
+    chosen = random.choice(safe_templates)
+    return [{
+        "title": chosen[0],
+        "description": chosen[1],
+        "pexels_search": random.choice(SAFE_OBJECT_SEARCH_TERMS)
+    }]
 
-
-def get_pexels_image(query):
-    """Fetch high-quality portrait image asset cleanly from Pexels API."""
-    url = "https://api.pexels.com/v1/search"
+def get_clean_pexels_image(query):
+    """Fetch strictly non-human, safe workspace and tech imagery."""
+    url = "[https://api.pexels.com/v1/search](https://api.pexels.com/v1/search)"
     headers = {"Authorization": str(PEXELS_API_KEY).strip()}
-    params = {"query": str(query).strip(), "orientation": "portrait", "per_page": 5}
+    
+    # Force clean keyword query
+    clean_query = f"{query} -woman -girl -people -person"
+    params = {"query": clean_query, "orientation": "portrait", "per_page": 10}
+
     try:
         res = requests.get(url, headers=headers, params=params, timeout=20)
         res.raise_for_status()
         photos = res.json().get("photos", [])
-        if photos:
-            return random.choice(photos)["src"]["large2x"]
+        
+        # Rigorous filtering
+        valid_photos = []
+        for photo in photos:
+            alt_text = photo.get("alt", "").lower()
+            if not any(bad_word in alt_text for bad_word in FORBIDDEN_WORDS):
+                valid_photos.append(photo["src"]["large2x"])
+
+        if valid_photos:
+            return random.choice(valid_photos)
+        elif photos:
+            # If alt texts don't specify, pick the first tech shot
+            return photos[0]["src"]["large2x"]
     except Exception as e:
-        print(f"Pexels fetch error: {e}")
+        print(f"Pexels error: {e}")
+
     return None
 
-
 def create_pin_via_session(title, description, image_url, link):
-    """Publish Pin directly via Web Session, managing CSRF handshake automatically."""
+    """Publish Pin directly via authenticated session."""
     if not PINTEREST_SESS:
-        print("❌ Error: PINTEREST_SESSION_COOKIE is missing in secrets.")
+        print("❌ Error: PINTEREST_SESSION_COOKIE is missing.")
         return None
 
     sess_cookie = PINTEREST_SESS.strip().strip('"').strip("'")
     session = requests.Session()
 
-    base_headers = {
+    session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    }
-    session.headers.update(base_headers)
+    })
 
-    # 1. تثبيت كوكي الجلسة الأساسي
     session.cookies.set("_pinterest_sess", sess_cookie, domain=".pinterest.com", path="/")
 
-    # 2. جلب صفحة البداية لتوليد وتثبيت كوكي الـ CSRF الحقيقي تلقائياً
     try:
-        session.get("https://www.pinterest.com/", timeout=15)
+        session.get("[https://www.pinterest.com/](https://www.pinterest.com/)", timeout=15)
         csrf_val = session.cookies.get("csrftoken") or (PINTEREST_CSRF or "").strip()
     except Exception as e:
         print(f"Handshake warning: {e}")
@@ -80,11 +144,10 @@ def create_pin_via_session(title, description, image_url, link):
         csrf_val = "1234567890abcdef1234567890abcdef"
         session.cookies.set("csrftoken", csrf_val, domain=".pinterest.com", path="/")
 
-    # 3. إعداد ترويسات الطلب بما فيها الـ CSRF
     post_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Referer": "https://www.pinterest.com/pin-builder/",
-        "Origin": "https://www.pinterest.com",
+        "Referer": "[https://www.pinterest.com/pin-builder/](https://www.pinterest.com/pin-builder/)",
+        "Origin": "[https://www.pinterest.com](https://www.pinterest.com)",
         "Accept": "application/json, text/javascript, */*, q=0.01",
         "X-Requested-With": "XMLHttpRequest",
         "X-Pinterest-AppState": "active",
@@ -109,79 +172,69 @@ def create_pin_via_session(title, description, image_url, link):
         "data": json.dumps(payload_data)
     }
 
-    endpoint = "https://www.pinterest.com/resource/PinResource/create/"
+    endpoint = "[https://www.pinterest.com/resource/PinResource/create/](https://www.pinterest.com/resource/PinResource/create/)"
 
     try:
         res = session.post(endpoint, data=data, headers=post_headers, timeout=30)
-        try:
-            res_json = res.json()
-        except Exception:
-            print(f"Server returned non-JSON. Status: {res.status_code}, Body: {res.text[:300]}")
-            return None
-
+        res_json = res.json()
         if res.status_code == 200 and "resource_response" in res_json:
-            status = res_json.get("resource_response", {}).get("status")
-            if status == "success":
+            if res_json.get("resource_response", {}).get("status") == "success":
                 return res_json["resource_response"]["data"]["id"]
-            else:
-                print(f"Pinterest API Response: {res_json}")
-        else:
-            print(f"Session failed: Status {res.status_code} - {res_json}")
+        print(f"Pinterest response failure: {res_json}")
     except Exception as e:
         print(f"Network error on session: {e}")
 
     return None
 
-
 def send_whatsapp_notification(title, pin_id):
-    """Send delivery notification via Green-API."""
+    """WhatsApp dispatch notice."""
     if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
         return
 
-    url = f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
+    url = f"[https://api.green-api.com/waInstance](https://api.green-api.com/waInstance){GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
     headers = {"Content-Type": "application/json"}
     chat_id = f"{WHATSAPP_PHONE}@c.us" if "@" not in str(WHATSAPP_PHONE) else str(WHATSAPP_PHONE)
-    pin_link = f"https://www.pinterest.com/pin/{pin_id}/" if pin_id else "Uploaded"
+    pin_link = f"[https://www.pinterest.com/pin/](https://www.pinterest.com/pin/){pin_id}/"
 
     msg = (
-        f"🚀 *تم نشر دبوس تلقائياً بنجاح!*\n\n"
+        f"🚀 *تم نشر دبوس جديد تلقائياً!*\n\n"
         f"📌 *العنوان:* {title}\n"
-        f"🔗 *رابط البن:* {pin_link}\n"
+        f"🔗 *الرابط:* {pin_link}\n"
         f"💰 *المنتج:* {PRODUCT_LINK}"
     )
 
-    payload = {"chatId": chat_id, "message": msg}
-
     try:
-        requests.post(url, headers=headers, json=payload, timeout=15)
-    except Exception as e:
-        print(f"WhatsApp notice error: {e}")
-
+        requests.post(url, headers=headers, json={"chatId": chat_id, "message": msg}, timeout=15)
+    except Exception:
+        pass
 
 def main():
-    print("Starting Pinterest Session Publisher (V2 Direct)...")
+    print("Starting Clean Automation Pipeline (Safe Objects Only)...")
     pins = get_trending_pin_ideas(count=1)
 
     for item in pins:
         title = item.get("title")
         desc = item.get("description")
-        search = item.get("pexels_search", "minimalist desk setup")
+        search = item.get("pexels_search") or random.choice(SAFE_OBJECT_SEARCH_TERMS)
 
-        print(f"\nFetching image for: {search}...")
-        img = get_pexels_image(search)
+        print(f"Searching clean visual for: {search}...")
+        img = get_clean_pexels_image(search)
         if not img:
-            print("No image found, skipping.")
+            print("No matching safe image found, falling back to default tech setup.")
+            img = get_clean_pexels_image("laptop coffee desk")
+
+        if not img:
+            print("Skipping pin due to missing image asset.")
             continue
 
         print(f"Publishing Pin: '{title}'...")
         pin_id = create_pin_via_session(title, desc, img, PRODUCT_LINK)
 
         if pin_id:
-            print(f"✅ Published successfully via Session! Pin ID: {pin_id}")
+            print(f"✅ Published successfully! Pin ID: {pin_id}")
             send_whatsapp_notification(title, pin_id)
         else:
             print("❌ Failed to publish pin via session.")
-
 
 if __name__ == "__main__":
     main()
