@@ -13,7 +13,7 @@ GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
 GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE")
 PRODUCT_LINK = os.getenv("PRODUCT_LINK", "https://aahmedalmno.gumroad.com/l/gmvtlk")
-SSHEET_WEBHOOK_URL = os.getenv("GOOGLE_SHEET_WEBHOOK_URL") or "https://script.google.com/macros/s/AKfycby5So0b6e1IK-tgRKjz86RTR8loLv4k4VzOsbLXXL4kfNHRCMNO_h7lfEsyWz5hwyXGy/exec"
+SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby5So0b6e1IK-tgRKjz86RTR8loLv4k4VzOsbLXXL4kfNHRCMNO_h7lfEsyWz5hwyXGy/exec"
 
 SAFE_OBJECT_SEARCH_TERMS = [
     "esp32 microcontroller circuit board",
