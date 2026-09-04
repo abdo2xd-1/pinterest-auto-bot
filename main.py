@@ -13,7 +13,9 @@ GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
 GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE")
 PRODUCT_LINK = os.getenv("PRODUCT_LINK", "https://aahmedalmno.gumroad.com/l/gmvtlk")
-SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby5So0b6e1IK-tgRKjz86RTR8loLv4k4VzOsbLXXL4kfNHRCMNO_h7lfEsyWz5hwyXGy/exec"
+
+# Direct Webhook fallback
+SHEET_WEBHOOK_URL = os.getenv("GOOGLE_SHEET_WEBHOOK_URL") or "https://script.google.com/macros/s/AKfycby5So0b6e1IK-tgRKjz86RTR8loLv4k4VzOsbLXXL4kfNHRCMNO_h7lfEsyWz5hwyXGy/exec"
 
 SAFE_OBJECT_SEARCH_TERMS = [
     "esp32 microcontroller circuit board",
@@ -31,10 +33,11 @@ FORBIDDEN_WORDS = [
 def get_pin_from_sheet():
     """Fetch next pin where Status = Ready from Google Sheets."""
     if not SHEET_WEBHOOK_URL:
-        print("⚠️ GOOGLE_SHEET_WEBHOOK_URL is not set.")
+        print("⚠️ SHEET_WEBHOOK_URL is not set.")
         return None
     try:
-        res = requests.get(SHEET_WEBHOOK_URL, timeout=15)
+        # allow_redirects=True is mandatory for Google Apps Script redirects
+        res = requests.get(SHEET_WEBHOOK_URL, timeout=20, allow_redirects=True)
         data = res.json()
         if data.get("found"):
             print(f"📋 Fetched row {data.get('row')} from Google Sheets: {data.get('title')}")
@@ -43,6 +46,10 @@ def get_pin_from_sheet():
             print("ℹ️ No rows found with Status = 'Ready' in Google Sheets.")
     except Exception as e:
         print(f"Error fetching from Google Sheets: {e}")
+        try:
+            print(f"Server response preview: {res.text[:250]}")
+        except Exception:
+            pass
     return None
 
 def update_sheet_status(row_number, pin_url):
@@ -51,7 +58,7 @@ def update_sheet_status(row_number, pin_url):
         return
     try:
         payload = {"row": row_number, "pin_url": pin_url}
-        requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=15)
+        requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=20, allow_redirects=True)
         print(f"✅ Row {row_number} updated to 'Published' in Google Sheets.")
     except Exception as e:
         print(f"Failed to update Google Sheet: {e}")
@@ -157,7 +164,7 @@ def send_whatsapp_notification(title, pin_id):
     pin_link = f"https://www.pinterest.com/pin/{pin_id}/"
 
     msg = (
-        f"🚀 *تم نشر دبوس من Google Sheets!*\n\n"
+        f"🚀 *تم نشر دبوس هاردوير من Google Sheets!*\n\n"
         f"📌 *العنوان:* {title}\n"
         f"🔗 *الرابط:* {pin_link}\n"
         f"💰 *المنتج:* {PRODUCT_LINK}"
@@ -170,7 +177,7 @@ def send_whatsapp_notification(title, pin_id):
 def main():
     print("Starting Pinterest Sheet Automation Pipeline...")
     
-    # جلب الدبوس التالي من Google Sheets
+    # 1. Fetch next pin from Google Sheet
     sheet_data = get_pin_from_sheet()
     
     if sheet_data:
@@ -198,7 +205,7 @@ def main():
         pin_url = f"https://www.pinterest.com/pin/{pin_id}/"
         print(f"✅ Published successfully! Pin ID: {pin_id}")
         
-        # تحديث الحالة إلى Published في الشيت
+        # 2. Update Google Sheet status to Published
         if row_num:
             update_sheet_status(row_num, pin_url)
             
