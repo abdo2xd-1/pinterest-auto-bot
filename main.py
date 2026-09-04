@@ -5,7 +5,6 @@ import time
 import requests
 
 # Secrets & Environment Variables
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PINTEREST_SESS = os.getenv("PINTEREST_SESSION_COOKIE")
 PINTEREST_CSRF = os.getenv("PINTEREST_CSRF_TOKEN")
@@ -14,18 +13,14 @@ GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
 GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE")
 PRODUCT_LINK = os.getenv("PRODUCT_LINK", "https://aahmedalmno.gumroad.com/l/gmvtlk")
+SHEET_WEBHOOK_URL = os.getenv("GOOGLE_SHEET_WEBHOOK_URL")
 
 SAFE_OBJECT_SEARCH_TERMS = [
-    "minimalist desk laptop dark screen",
-    "developer monitor code terminal",
-    "crypto trading charts screen setup",
-    "financial growth stock market graph",
-    "modern minimalist home office desk setup",
-    "notebook pen coffee productivity desk",
-    "clean macbook dark aesthetic workspace",
-    "server room led technology hardware",
-    "business charts paperwork fountain pen",
-    "mechanical keyboard clean desk setup"
+    "esp32 microcontroller circuit board",
+    "arduino breadboard electronics",
+    "raspberry pi hardware tech",
+    "electronic components circuit pcb",
+    "soldering iron workbench electronics"
 ]
 
 FORBIDDEN_WORDS = [
@@ -33,25 +28,38 @@ FORBIDDEN_WORDS = [
     "bikini", "lingerie", "sexy", "body", "people", "couple", "face", "man"
 ]
 
-def get_trending_pin_ideas(count=1):
-    safe_templates = [
-        ("Top 5 Digital Products to Sell Automatically", "Build recurring passive income streams without inventory. Click the link to start today! #PassiveIncome #Gumroad #DigitalProducts"),
-        ("How to Automate Workflows Using Python Scripts", "Save 10+ hours weekly with intelligent background automation. Learn more inside! #Automation #Python #Developer"),
-        ("Build a $1,000/Month Digital Asset Portfolio", "Step-by-step framework to launch high-margin downloadable assets online. #SideHustle #OnlineBusiness #PassiveRevenue"),
-        ("Best Productivity Tools for Solopreneurs in 2026", "Scale your online venture effortlessly with minimal software overhead. #Productivity #NoCode #TechTools"),
-        ("The Complete Gumroad Sales Blueprint", "A simple roadmap to drive targeted organic traffic and close sales on autopilot. #Marketing #ECommerce #SalesFunnel")
-    ]
-    chosen = random.choice(safe_templates)
-    return [{
-        "title": chosen[0],
-        "description": chosen[1],
-        "pexels_search": random.choice(SAFE_OBJECT_SEARCH_TERMS)
-    }]
+def get_pin_from_sheet():
+    """Fetch next pin where Status = Ready from Google Sheets."""
+    if not SHEET_WEBHOOK_URL:
+        print("⚠️ GOOGLE_SHEET_WEBHOOK_URL is not set.")
+        return None
+    try:
+        res = requests.get(SHEET_WEBHOOK_URL, timeout=15)
+        data = res.json()
+        if data.get("found"):
+            print(f"📋 Fetched row {data.get('row')} from Google Sheets: {data.get('title')}")
+            return data
+        else:
+            print("ℹ️ No rows found with Status = 'Ready' in Google Sheets.")
+    except Exception as e:
+        print(f"Error fetching from Google Sheets: {e}")
+    return None
+
+def update_sheet_status(row_number, pin_url):
+    """Mark row as Published in Google Sheets."""
+    if not SHEET_WEBHOOK_URL or not row_number:
+        return
+    try:
+        payload = {"row": row_number, "pin_url": pin_url}
+        requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=15)
+        print(f"✅ Row {row_number} updated to 'Published' in Google Sheets.")
+    except Exception as e:
+        print(f"Failed to update Google Sheet: {e}")
 
 def get_clean_pexels_image(query):
+    """Strictly objects-only images."""
     url = "https://api.pexels.com/v1/search"
     headers = {"Authorization": str(PEXELS_API_KEY).strip()}
-    
     clean_query = f"{query} -woman -girl -people -person"
     params = {"query": clean_query, "orientation": "portrait", "per_page": 10}
 
@@ -71,13 +79,12 @@ def get_clean_pexels_image(query):
         elif photos:
             return photos[0]["src"]["large2x"]
     except Exception as e:
-        print(f"Pexels fetch error: {e}")
-
+        print(f"Pexels error: {e}")
     return None
 
 def create_pin_via_session(title, description, image_url, link):
     if not PINTEREST_SESS:
-        print("❌ Error: PINTEREST_SESSION_COOKIE is missing in secrets.")
+        print("❌ Error: PINTEREST_SESSION_COOKIE is missing.")
         return None
 
     sess_cookie = PINTEREST_SESS.strip().strip('"').strip("'")
@@ -94,8 +101,7 @@ def create_pin_via_session(title, description, image_url, link):
     try:
         session.get("https://www.pinterest.com/", timeout=15)
         csrf_val = session.cookies.get("csrftoken") or (PINTEREST_CSRF or "").strip()
-    except Exception as e:
-        print(f"Handshake warning: {e}")
+    except Exception:
         csrf_val = (PINTEREST_CSRF or "").strip()
 
     if not csrf_val:
@@ -141,56 +147,64 @@ def create_pin_via_session(title, description, image_url, link):
         print(f"Pinterest error response: {res_json}")
     except Exception as e:
         print(f"Network error on session: {e}")
-
     return None
 
 def send_whatsapp_notification(title, pin_id):
     if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
         return
-
     url = f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
     chat_id = f"{WHATSAPP_PHONE}@c.us" if "@" not in str(WHATSAPP_PHONE) else str(WHATSAPP_PHONE)
     pin_link = f"https://www.pinterest.com/pin/{pin_id}/"
 
     msg = (
-        f"🚀 *تم نشر دبوس تلقائياً بنجاح!*\n\n"
+        f"🚀 *تم نشر دبوس من Google Sheets!*\n\n"
         f"📌 *العنوان:* {title}\n"
-        f"🔗 *رابط البن:* {pin_link}\n"
+        f"🔗 *الرابط:* {pin_link}\n"
         f"💰 *المنتج:* {PRODUCT_LINK}"
     )
-
     try:
         requests.post(url, headers={"Content-Type": "application/json"}, json={"chatId": chat_id, "message": msg}, timeout=15)
     except Exception:
         pass
 
 def main():
-    print("Starting Clean Automation Pipeline (Safe Objects Only)...")
-    pins = get_trending_pin_ideas(count=1)
+    print("Starting Pinterest Sheet Automation Pipeline...")
+    
+    # جلب الدبوس التالي من Google Sheets
+    sheet_data = get_pin_from_sheet()
+    
+    if sheet_data:
+        title = sheet_data.get("title")
+        desc = sheet_data.get("description")
+        search = sheet_data.get("search_query") or "electronics circuit board"
+        row_num = sheet_data.get("row")
+    else:
+        print("No item fetched from sheet. Stopping execution.")
+        return
 
-    for item in pins:
-        title = item.get("title")
-        desc = item.get("description")
-        search = item.get("pexels_search") or random.choice(SAFE_OBJECT_SEARCH_TERMS)
+    print(f"Searching clean visual for: {search}...")
+    img = get_clean_pexels_image(search)
+    if not img:
+        img = get_clean_pexels_image("circuit board electronics")
 
-        print(f"Searching clean visual for: {search}...")
-        img = get_clean_pexels_image(search)
-        if not img:
-            print("No matching safe image found, trying fallback...")
-            img = get_clean_pexels_image("laptop coffee desk")
+    if not img:
+        print("Skipping pin due to missing image asset.")
+        return
 
-        if not img:
-            print("Skipping pin due to missing image asset.")
-            continue
+    print(f"Publishing Pin: '{title}'...")
+    pin_id = create_pin_via_session(title, desc, img, PRODUCT_LINK)
 
-        print(f"Publishing Pin: '{title}'...")
-        pin_id = create_pin_via_session(title, desc, img, PRODUCT_LINK)
-
-        if pin_id:
-            print(f"✅ Published successfully! Pin ID: {pin_id}")
-            send_whatsapp_notification(title, pin_id)
-        else:
-            print("❌ Failed to publish pin via session.")
+    if pin_id:
+        pin_url = f"https://www.pinterest.com/pin/{pin_id}/"
+        print(f"✅ Published successfully! Pin ID: {pin_id}")
+        
+        # تحديث الحالة إلى Published في الشيت
+        if row_num:
+            update_sheet_status(row_num, pin_url)
+            
+        send_whatsapp_notification(title, pin_id)
+    else:
+        print("❌ Failed to publish pin via session.")
 
 if __name__ == "__main__":
     main()
