@@ -3,7 +3,7 @@ name: Pinterest Auto Publisher
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'
 
 jobs:
   publish:
