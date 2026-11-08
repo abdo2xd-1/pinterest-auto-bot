@@ -70,50 +70,37 @@ def generate_seo_content(idea):
     return title, final_description
 
 # ==========================================
-# 5. تحميل صورة إلكترونيات جاهزة وعالية الجودة
+# 5. النشر المباشر على بنترست (باستخدام رابط الصورة مباشرة)
 # ==========================================
-def download_ready_image(image_path="generated_pin.jpg"):
-    # استخدام رابط صورة إلكترونيات وتكنولوجيا مجانية عالية الجودة
-    image_url = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
-    response = requests.get(image_url)
-    if response.status_code == 200:
-        with open(image_path, "wb") as f:
-            f.write(response.content)
-        return image_path
-    else:
-        raise Exception("فشل في تحميل الصورة الجاهزة.")
-
-# ==========================================
-# 6. النشر على بنترست
-# ==========================================
-def upload_to_pinterest(title, description, image_path):
+def upload_to_pinterest(title, description):
     headers = {
         "Authorization": f"Bearer {PINTEREST_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
     
-    media_url = "https://api.pinterest.com/v5/media"
-    media_response = requests.post(media_url, headers=headers, json={"media_type": "image"}).json()
+    # استخدام رابط صورة جاهز ومباشر لتجنب أي مشاكل في الرفع
+    image_url = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
     
-    with open(image_path, 'rb') as f:
-        requests.post(media_response["upload_url"], data=media_response["upload_parameters"], files={'file': f})
-    
-    import base64
     pin_payload = {
         "board_id": PINTEREST_BOARD_ID,
         "media_source": {
-            "source_type": "image_base64",
-            "content_type": "image/jpeg",
-            "data": base64.b64encode(open(image_path, "rb").read()).decode('utf-8')
+            "source_type": "image_url",
+            "url": image_url
         },
         "title": title,
         "description": description
     }
+    
     create_response = requests.post("https://api.pinterest.com/v5/pins", headers=headers, json=pin_payload)
-    return create_response.status_code == 201
+    
+    if create_response.status_code == 201:
+        return True
+    else:
+        print(f"تفاصيل خطأ بنترست: {create_response.text}")
+        return False
 
 # ==========================================
-# 7. التشغيل
+# 6. التشغيل
 # ==========================================
 def main():
     try:
@@ -126,17 +113,14 @@ def main():
         print("2. جاري تجهيز عنوان السيو والوصف بالإنجليزية...")
         title, description = generate_seo_content(idea)
         
-        print("3. جاري جلب الصورة الاحترافية...")
-        image_path = download_ready_image()
-        
-        print("4. جاري النشر على بنترست...")
-        success = upload_to_pinterest(title, description, image_path)
+        print("3. جاري النشر المباشر على بنترست...")
+        success = upload_to_pinterest(title, description)
         
         if success:
             save_to_history(idea)
             print(f"✅ تم النشر بنجاح وتم تحديث السجل: {title}")
         else:
-            print("❌ حدث خطأ أثناء النشر.")
+            print("❌ حدث خطأ أثناء النشر على بنترست.")
             
     except Exception as e:
         print(f"❌ حدث خطأ: {e}")
