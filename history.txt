@@ -1,0 +1,1 @@
+A miniature DIY smart home automation hub with an OLED display and sensors
