@@ -11,7 +11,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
 PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
 
-# استخدام المكتبة الجديدة
 client = genai.Client(api_key=GEMINI_API_KEY)
 HISTORY_FILE = "history.txt"
 
@@ -52,9 +51,9 @@ def generate_unique_idea(history):
     Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
     """
     
-    # استخدام الموديل الأحدث 2.0
+    # استخدام الموديل الأحدث gemini-3.8-flash
     response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-3.8-flash',
         contents=prompt
     )
     return response.text.strip()
@@ -75,8 +74,9 @@ def generate_seo_content(idea):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
     
+    # استخدام الموديل الأحدث gemini-3.8-flash
     response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-3.8-flash',
         contents=prompt
     )
     
