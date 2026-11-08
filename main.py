@@ -2,7 +2,6 @@ import os
 import json
 import random
 import requests
-from google import genai
 
 # ==========================================
 # 1. إعدادات المفاتيح
@@ -11,8 +10,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
 PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
 
-# تهيئة العميل بالطريقة الرسمية الحديثة
-client = genai.Client(api_key=GEMINI_API_KEY)
 HISTORY_FILE = "history.txt"
 
 # ==========================================
@@ -29,7 +26,7 @@ def save_to_history(idea):
         f.write(idea + "\n")
 
 # ==========================================
-# 3. ابتكار الفكرة برمجياً (بالمكتبة الرسمية)
+# 3. ابتكار الفكرة برمجياً (بالموديل المطلوب مباشرة)
 # ==========================================
 def generate_unique_idea(history):
     topics = [
@@ -51,12 +48,18 @@ def generate_unique_idea(history):
     Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
     """
     
-    # استخدام الموديل القياسي المدعوم رسمياً من المكتبة الجديدة
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
-    return response.text.strip()
+    # استخدام الموديل الذي طلبه السيرفر بالاسم تماماً
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    response = requests.post(url, headers=headers, json=payload)
+    data = response.json()
+    
+    if "candidates" in data:
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    else:
+        raise Exception(f"فشل توليد الفكرة. تفاصيل: {data}")
 
 # ==========================================
 # 4. توليد المحتوى والسيو
@@ -74,12 +77,18 @@ def generate_seo_content(idea):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
     
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
-    text = response.text.replace('```json', '').replace('```', '').strip()
+    response = requests.post(url, headers=headers, json=payload)
+    data = response.json()
+    
+    if "candidates" not in data:
+        raise Exception(f"فشل توليد السيو. تفاصيل: {data}")
+        
+    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    text = text.replace('```json', '').replace('```', '').strip()
     parsed_data = json.loads(text)
     
     call_to_action = "\n\n🔌 If you loved this project, make sure to follow our page for daily DIY electronics and tech inspiration!"
