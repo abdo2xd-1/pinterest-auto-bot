@@ -6,7 +6,6 @@ import requests
 # ==========================================
 # 1. إعدادات المفاتيح
 # ==========================================
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
 PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
 
@@ -26,7 +25,7 @@ def save_to_history(idea):
         f.write(idea + "\n")
 
 # ==========================================
-# 3. اختيار فكرة فريدة من القائمة الجاهزة (بدون أخطاء سيرفرات)
+# 3. اختيار فكرة فريدة من القائمة الجاهزة
 # ==========================================
 def generate_unique_idea(history):
     ideas_pool = [
@@ -42,17 +41,15 @@ def generate_unique_idea(history):
         "A custom modular breadboard electronics prototype with glowing jumper wires"
     ]
     
-    # تصفية الأفكار غير المستخدمة سابقاً لتجنب التكرار
     available_ideas = [idea for idea in ideas_pool if idea not in history]
-    
     if not available_ideas:
-        available_ideas = ideas_pool # إعادة استخدام القائمة لو نفذت
+        available_ideas = ideas_pool
         
     selected_idea = random.choice(available_ideas)
     return selected_idea
 
 # ==========================================
-# 4. توليد المحتوى والسيو (جاهز ومضمون)
+# 4. توليد المحتوى والسيو (إنجليزي بالكامل)
 # ==========================================
 def generate_seo_content(idea):
     titles = [
@@ -73,30 +70,18 @@ def generate_seo_content(idea):
     return title, final_description
 
 # ==========================================
-# 5. توليد الصورة
+# 5. تحميل صورة إلكترونيات جاهزة وعالية الجودة
 # ==========================================
-def generate_image(idea, image_path="generated_pin.jpg"):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    
-    image_prompt = f"A highly detailed, aesthetic close-up photo of an electronic DIY project: {idea}. Cinematic lighting, cyberpunk vibes, high resolution, Pinterest style."
-    
-    payload = {
-        "instances": [{"prompt": image_prompt}],
-        "parameters": {"sampleCount": 1}
-    }
-    
-    response = requests.post(url, headers=headers, json=payload)
-    response_data = response.json()
-    
-    if "predictions" in response_data:
-        import base64
-        image_bytes = base64.b64decode(response_data["predictions"][0]["bytesBase64Encoded"])
+def download_ready_image(image_path="generated_pin.jpg"):
+    # استخدام رابط صورة إلكترونيات وتكنولوجيا مجانية عالية الجودة
+    image_url = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
+    response = requests.get(image_url)
+    if response.status_code == 200:
         with open(image_path, "wb") as f:
-            f.write(image_bytes)
+            f.write(response.content)
         return image_path
     else:
-        raise Exception(f"فشل توليد الصورة: {response_data}")
+        raise Exception("فشل في تحميل الصورة الجاهزة.")
 
 # ==========================================
 # 6. النشر على بنترست
@@ -141,8 +126,8 @@ def main():
         print("2. جاري تجهيز عنوان السيو والوصف بالإنجليزية...")
         title, description = generate_seo_content(idea)
         
-        print("3. جاري توليد الصورة...")
-        image_path = generate_image(idea)
+        print("3. جاري جلب الصورة الاحترافية...")
+        image_path = download_ready_image()
         
         print("4. جاري النشر على بنترست...")
         success = upload_to_pinterest(title, description, image_path)
