@@ -1,1 +1,2 @@
 A miniature DIY smart home automation hub with an OLED display and sensors
+A handmade portable soldering station with temperature control digital screen
