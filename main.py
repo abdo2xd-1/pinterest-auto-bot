@@ -26,9 +26,31 @@ def save_to_history(idea):
         f.write(idea + "\n")
 
 # ==========================================
-# 3. ابتكار الفكرة برمجياً
+# 3. جلب الموديل المتاح تلقائياً (الحل الجذري)
 # ==========================================
-def generate_unique_idea(history):
+def get_working_model():
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+    response = requests.get(url)
+    data = response.json()
+    
+    if "models" in data:
+        # نبحث عن أي موديل يدعم توليد النصوص
+        available_models = [m["name"] for m in data["models"] if "generateContent" in m.get("supportedGenerationMethods", [])]
+        
+        if available_models:
+            # نفضل الموديلات السريعة (flash) إن وجدت
+            for model in available_models:
+                if "flash" in model:
+                    return model
+            # إن لم يوجد، نختار أول موديل متاح
+            return available_models[0]
+            
+    raise Exception(f"لم نتمكن من العثور على أي موديل نصوص مدعوم في حسابك! الرد من جوجل: {data}")
+
+# ==========================================
+# 4. ابتكار الفكرة برمجياً
+# ==========================================
+def generate_unique_idea(history, model_name):
     topics = [
         "Arduino projects", "Raspberry Pi DIY", "Home Automation circuits", 
         "LED Matrix displays", "Robotics and motors", "ESP32 IoT", 
@@ -48,7 +70,7 @@ def generate_unique_idea(history):
     Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
     """
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
@@ -58,12 +80,12 @@ def generate_unique_idea(history):
     if "candidates" in data:
         return data["candidates"][0]["content"]["parts"][0]["text"].strip()
     else:
-        raise Exception(f"فشل توليد الفكرة. تأكد من صحة مفتاح Gemini API. تفاصيل: {data}")
+        raise Exception(f"فشل توليد الفكرة. تفاصيل: {data}")
 
 # ==========================================
-# 4. توليد المحتوى والسيو
+# 5. توليد المحتوى والسيو
 # ==========================================
-def generate_seo_content(idea):
+def generate_seo_content(idea, model_name):
     prompt = f"""
     You are a Pinterest SEO expert.
     I have this DIY electronics project idea: "{idea}".
@@ -76,7 +98,7 @@ def generate_seo_content(idea):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
@@ -96,7 +118,7 @@ def generate_seo_content(idea):
     return parsed_data["title"], final_description
 
 # ==========================================
-# 5. توليد الصورة
+# 6. توليد الصورة
 # ==========================================
 def generate_image(idea, image_path="generated_pin.jpg"):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_API_KEY}"
@@ -121,7 +143,7 @@ def generate_image(idea, image_path="generated_pin.jpg"):
         raise Exception(f"فشل توليد الصورة: {response_data}")
 
 # ==========================================
-# 6. النشر على بنترست
+# 7. النشر على بنترست
 # ==========================================
 def upload_to_pinterest(title, description, image_path):
     headers = {
@@ -150,18 +172,22 @@ def upload_to_pinterest(title, description, image_path):
     return create_response.status_code == 201
 
 # ==========================================
-# 7. التشغيل
+# 8. التشغيل
 # ==========================================
 def main():
     try:
+        print("0. جاري البحث عن أفضل موديل متاح لحسابك...")
+        model_name = get_working_model()
+        print(f"✅ تم العثور على الموديل واختياره بنجاح: {model_name}")
+
         history = load_history()
         
         print("1. جاري ابتكار فكرة جديدة ومراجعة السجل...")
-        idea = generate_unique_idea(history)
+        idea = generate_unique_idea(history, model_name)
         print(f"الفكرة: {idea}")
         
         print("2. جاري كتابة المحتوى والسيو بالإنجليزية...")
-        title, description = generate_seo_content(idea)
+        title, description = generate_seo_content(idea, model_name)
         
         print("3. جاري توليد الصورة...")
         image_path = generate_image(idea)
