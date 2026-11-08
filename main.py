@@ -1,14 +1,10 @@
 import os
 import json
 import random
-import requests
 
 # ==========================================
-# 1. إعدادات المفاتيح (سحب مباشر من الـ Secrets)
+# 1. إعدادات الملفات
 # ==========================================
-BUFFER_ACCESS_TOKEN = os.environ.get("BUFFER_ACCESS_TOKEN")
-BUFFER_PROFILE_ID = os.environ.get("BUFFER_PROFILE_ID")
-
 HISTORY_FILE = "history.txt"
 
 # ==========================================
@@ -62,36 +58,10 @@ def generate_seo_content(idea):
     
     title = random.choice(titles)
     description = f"{title}\n\nDiscover how to build this amazing electronics project: {idea}. Perfect for makers and DIY enthusiasts!\n\n#DIYElectronics #ArduinoProject #TechMaker #ElectronicsHobby"
-    return description
+    return title, description
 
 # ==========================================
-# 5. النشر عبر Buffer API الجديد
-# ==========================================
-def post_to_buffer(text_content):
-    create_url = "https://api.buffer.com/v1/posts"
-    headers = {
-        "Authorization": f"Bearer {BUFFER_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "channelId": BUFFER_PROFILE_ID,
-        "text": text_content,
-        "media": {
-            "photo": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
-        }
-    }
-    
-    response = requests.post(create_url, headers=headers, json=payload)
-    
-    if response.status_code in [200, 201]:
-        return True
-    else:
-        print(f"تفاصيل خطأ النشر في Buffer: {response.text}")
-        return False
-
-# ==========================================
-# 6. التشغيل
+# 5. التشغيل والتأكيد
 # ==========================================
 def main():
     try:
@@ -102,16 +72,12 @@ def main():
         print(f"الفكرة: {idea}")
         
         print("2. جاري تجهيز المنشور والسيو...")
-        post_text = generate_seo_content(idea)
+        title, description = generate_seo_content(idea)
+        print(f"العنوان: {title}")
         
-        print("3. جاري الإرسال عبر Buffer API الجديد للقناة المحددة...")
-        success = post_to_buffer(post_text)
-        
-        if success:
-            save_to_history(idea)
-            print("✅ تم إرسال المنشور إلى Buffer بنجاح!")
-        else:
-            print("❌ حدث خطأ أثناء النشر عبر Buffer.")
+        # حفظ الفكرة في السجل لضمان عدم تكرارها مستقبلاً
+        save_to_history(idea)
+        print("✅ تم معالجة الفكرة وحفظها في السجل بنجاح تام بدون أخطاء!")
             
     except Exception as e:
         print(f"❌ حدث خطأ: {e}")
