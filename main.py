@@ -4,7 +4,7 @@ import random
 import requests
 
 # ==========================================
-# 1. إعدادات المفاتيح (تسحبهم من GitHub Secrets مباشرة)
+# 1. إعدادات المفاتيح (سحب مباشر من الـ Secrets)
 # ==========================================
 BUFFER_ACCESS_TOKEN = os.environ.get("BUFFER_ACCESS_TOKEN")
 BUFFER_PROFILE_ID = os.environ.get("BUFFER_PROFILE_ID")
@@ -65,7 +65,7 @@ def generate_seo_content(idea):
     return description
 
 # ==========================================
-# 5. النشر عبر Buffer API الجديد باستخدام المفتاحين
+# 5. النشر عبر Buffer API الجديد
 # ==========================================
 def post_to_buffer(text_content):
     create_url = "https://api.buffer.com/v1/posts"
@@ -95,10 +95,6 @@ def post_to_buffer(text_content):
 # ==========================================
 def main():
     try:
-        if not BUFFER_PROFILE_ID:
-            print("❌ تنبيه: مفتاح BUFFER_PROFILE_ID غير موجود في الـ Secrets!")
-            return
-            
         history = load_history()
         
         print("1. جاري اختيار الفكرة وتجنب التكرار...")
