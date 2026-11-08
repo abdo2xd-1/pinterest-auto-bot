@@ -2,7 +2,7 @@ import os
 import json
 import random
 import requests
-import google.generativeai as genai
+from google import genai
 
 # ==========================================
 # 1. إعدادات المفاتيح
@@ -11,22 +11,20 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
 PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
 
-genai.configure(api_key=GEMINI_API_KEY)
-
+# استخدام المكتبة الجديدة
+client = genai.Client(api_key=GEMINI_API_KEY)
 HISTORY_FILE = "history.txt"
 
 # ==========================================
 # 2. إدارة سجل الأفكار (History)
 # ==========================================
 def load_history():
-    # قراءة الأفكار السابقة حتى لا تتكرر
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return [line.strip() for line in f.readlines()]
     return []
 
 def save_to_history(idea):
-    # حفظ الفكرة الجديدة في السجل
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(idea + "\n")
 
@@ -42,11 +40,9 @@ def generate_unique_idea(history):
     ]
     random_topic = random.choice(topics)
     
-    # نرسل آخر 50 فكرة للنموذج ليتجنب تكرارها
     recent_history = history[-50:] if history else []
     history_text = "\n".join(recent_history)
     
-    model = genai.GenerativeModel('gemini-1.5-flash')
     prompt = f"""
     You are a creative electronics engineer. Come up with a very specific, unique, and aesthetic DIY electronics project idea in the field of '{random_topic}'.
     The idea must be highly visual and suitable for a Pinterest image.
@@ -55,14 +51,18 @@ def generate_unique_idea(history):
     
     Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
     """
-    response = model.generate_content(prompt)
+    
+    # استخدام الموديل الأحدث 2.0
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=prompt
+    )
     return response.text.strip()
 
 # ==========================================
 # 4. توليد المحتوى والسيو (باللغة الإنجليزية)
 # ==========================================
 def generate_seo_content(idea):
-    model = genai.GenerativeModel('gemini-1.5-flash')
     prompt = f"""
     You are a Pinterest SEO expert.
     I have this DIY electronics project idea: "{idea}".
@@ -74,11 +74,15 @@ def generate_seo_content(idea):
     Return ONLY a JSON response in this exact format (no markdown formatting or extra text):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
-    response = model.generate_content(prompt)
+    
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=prompt
+    )
+    
     text = response.text.replace('```json', '').replace('```', '').strip()
     data = json.loads(text)
     
-    # الجملة التشجيعية باللغة الإنجليزية
     call_to_action = "\n\n🔌 If you loved this project, make sure to follow our page for daily DIY electronics and tech inspiration!"
     final_description = data["description"] + call_to_action
     
@@ -160,7 +164,7 @@ def main():
         success = upload_to_pinterest(title, description, image_path)
         
         if success:
-            save_to_history(idea) # حفظ الفكرة في السجل فقط إذا نجح النشر
+            save_to_history(idea)
             print(f"✅ تم النشر بنجاح وتم تحديث السجل: {title}")
         else:
             print("❌ حدث خطأ أثناء النشر.")
