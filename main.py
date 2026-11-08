@@ -9,11 +9,45 @@ import requests
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
 PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
-
 HISTORY_FILE = "history.txt"
 
+# قائمة الموديلات التي سنجربها حتى ينجح واحد منها
+MODELS_TO_TRY = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.0-pro",
+    "gemini-pro",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-001",
+    "gemini-1.5-flash-002"
+]
+
 # ==========================================
-# 2. إدارة سجل الأفكار (History)
+# 2. دالة ذكية لتوليد النصوص (تجرب كل الموديلات)
+# ==========================================
+def generate_text_with_retry(prompt):
+    headers = {"Content-Type": "application/json"}
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    last_error = None
+    for model in MODELS_TO_TRY:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            data = response.json()
+            
+            if "candidates" in data:
+                print(f"✅ نجح الاتصال باستخدام الموديل: {model}")
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            else:
+                last_error = data
+        except Exception as e:
+            last_error = str(e)
+            
+    raise Exception(f"فشلت كل الموديلات في توليد النص. آخر خطأ: {last_error}")
+
+# ==========================================
+# 3. إدارة سجل الأفكار (History)
 # ==========================================
 def load_history():
     if os.path.exists(HISTORY_FILE):
@@ -26,7 +60,7 @@ def save_to_history(idea):
         f.write(idea + "\n")
 
 # ==========================================
-# 3. ابتكار الفكرة برمجياً (بالاتصال المباشر)
+# 4. ابتكار الفكرة برمجياً
 # ==========================================
 def generate_unique_idea(history):
     topics = [
@@ -36,7 +70,6 @@ def generate_unique_idea(history):
         "Soldering art", "Audio amplifiers DIY"
     ]
     random_topic = random.choice(topics)
-    
     recent_history = history[-50:] if history else []
     history_text = "\n".join(recent_history)
     
@@ -46,24 +79,12 @@ def generate_unique_idea(history):
     Do NOT use any of these previously generated ideas:
     {history_text}
     
-    Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
+    Write the idea in exactly one short English sentence (under 15 words).
     """
-    
-    # استخدام الموديل العالمي المفتوح للجميع gemini-pro
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    response = requests.post(url, headers=headers, json=payload)
-    data = response.json()
-    
-    if "candidates" in data:
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    else:
-        raise Exception(f"فشل توليد الفكرة: {data}")
+    return generate_text_with_retry(prompt)
 
 # ==========================================
-# 4. توليد المحتوى والسيو (بالاتصال المباشر)
+# 5. توليد المحتوى والسيو
 # ==========================================
 def generate_seo_content(idea):
     prompt = f"""
@@ -78,18 +99,7 @@ def generate_seo_content(idea):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
     
-    # استخدام الموديل العالمي المفتوح للجميع gemini-pro
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    response = requests.post(url, headers=headers, json=payload)
-    data = response.json()
-    
-    if "candidates" not in data:
-        raise Exception(f"فشل توليد السيو: {data}")
-        
-    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    text = generate_text_with_retry(prompt)
     text = text.replace('```json', '').replace('```', '').strip()
     parsed_data = json.loads(text)
     
@@ -99,7 +109,7 @@ def generate_seo_content(idea):
     return parsed_data["title"], final_description
 
 # ==========================================
-# 5. توليد الصورة
+# 6. توليد الصورة
 # ==========================================
 def generate_image(idea, image_path="generated_pin.jpg"):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_API_KEY}"
@@ -125,7 +135,7 @@ def generate_image(idea, image_path="generated_pin.jpg"):
         raise Exception(f"فشل توليد الصورة: {response_data}")
 
 # ==========================================
-# 6. النشر على بنترست
+# 7. النشر على بنترست
 # ==========================================
 def upload_to_pinterest(title, description, image_path):
     headers = {
@@ -154,7 +164,7 @@ def upload_to_pinterest(title, description, image_path):
     return create_response.status_code == 201
 
 # ==========================================
-# 7. التشغيل
+# 8. التشغيل
 # ==========================================
 def main():
     try:
