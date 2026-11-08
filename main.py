@@ -1,217 +1,172 @@
 import os
 import json
 import random
-import time
 import requests
+import google.generativeai as genai
 
-# Secrets & Environment Variables
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-PINTEREST_SESS = os.getenv("PINTEREST_SESSION_COOKIE")
-PINTEREST_CSRF = os.getenv("PINTEREST_CSRF_TOKEN")
-PINTEREST_BOARD_ID = os.getenv("PINTEREST_BOARD_ID")
-GREEN_API_INSTANCE_ID = os.getenv("GREEN_API_INSTANCE_ID")
-GREEN_API_API_TOKEN = os.getenv("GREEN_API_API_TOKEN")
-WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE")
-PRODUCT_LINK = os.getenv("PRODUCT_LINK", "https://aahmedalmno.gumroad.com/l/gmvtlk")
+# ==========================================
+# 1. إعدادات المفاتيح
+# ==========================================
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
+PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
 
-# Direct Webhook fallback
-SHEET_WEBHOOK_URL = os.getenv("GOOGLE_SHEET_WEBHOOK_URL") or "https://script.google.com/macros/s/AKfycby5So0b6e1IK-tgRKjz86RTR8loLv4k4VzOsbLXXL4kfNHRCMNO_h7lfEsyWz5hwyXGy/exec"
+genai.configure(api_key=GEMINI_API_KEY)
 
-SAFE_OBJECT_SEARCH_TERMS = [
-    "esp32 microcontroller circuit board",
-    "arduino breadboard electronics",
-    "raspberry pi hardware tech",
-    "electronic components circuit pcb",
-    "soldering iron workbench electronics"
-]
+HISTORY_FILE = "history.txt"
 
-FORBIDDEN_WORDS = [
-    "woman", "girl", "female", "model", "lady", "person", "portrait",
-    "bikini", "lingerie", "sexy", "body", "people", "couple", "face", "man"
-]
+# ==========================================
+# 2. إدارة سجل الأفكار (History)
+# ==========================================
+def load_history():
+    # قراءة الأفكار السابقة حتى لا تتكرر
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return [line.strip() for line in f.readlines()]
+    return []
 
-def get_pin_from_sheet():
-    """Fetch next pin where Status = Ready from Google Sheets."""
-    if not SHEET_WEBHOOK_URL:
-        print("⚠️ SHEET_WEBHOOK_URL is not set.")
-        return None
-    try:
-        # allow_redirects=True is mandatory for Google Apps Script redirects
-        res = requests.get(SHEET_WEBHOOK_URL, timeout=20, allow_redirects=True)
-        data = res.json()
-        if data.get("found"):
-            print(f"📋 Fetched row {data.get('row')} from Google Sheets: {data.get('title')}")
-            return data
-        else:
-            print("ℹ️ No rows found with Status = 'Ready' in Google Sheets.")
-    except Exception as e:
-        print(f"Error fetching from Google Sheets: {e}")
-        try:
-            print(f"Server response preview: {res.text[:250]}")
-        except Exception:
-            pass
-    return None
+def save_to_history(idea):
+    # حفظ الفكرة الجديدة في السجل
+    with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+        f.write(idea + "\n")
 
-def update_sheet_status(row_number, pin_url):
-    """Mark row as Published in Google Sheets."""
-    if not SHEET_WEBHOOK_URL or not row_number:
-        return
-    try:
-        payload = {"row": row_number, "pin_url": pin_url}
-        requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=20, allow_redirects=True)
-        print(f"✅ Row {row_number} updated to 'Published' in Google Sheets.")
-    except Exception as e:
-        print(f"Failed to update Google Sheet: {e}")
+# ==========================================
+# 3. ابتكار الفكرة برمجياً
+# ==========================================
+def generate_unique_idea(history):
+    topics = [
+        "Arduino projects", "Raspberry Pi DIY", "Home Automation circuits", 
+        "LED Matrix displays", "Robotics and motors", "ESP32 IoT", 
+        "Vintage electronics repair", "PCB design aesthetic", 
+        "Soldering art", "Audio amplifiers DIY"
+    ]
+    random_topic = random.choice(topics)
+    
+    # نرسل آخر 50 فكرة للنموذج ليتجنب تكرارها
+    recent_history = history[-50:] if history else []
+    history_text = "\n".join(recent_history)
+    
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    prompt = f"""
+    You are a creative electronics engineer. Come up with a very specific, unique, and aesthetic DIY electronics project idea in the field of '{random_topic}'.
+    The idea must be highly visual and suitable for a Pinterest image.
+    Do NOT use any of these previously generated ideas:
+    {history_text}
+    
+    Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
+    """
+    response = model.generate_content(prompt)
+    return response.text.strip()
 
-def get_clean_pexels_image(query):
-    """Strictly objects-only images."""
-    url = "https://api.pexels.com/v1/search"
-    headers = {"Authorization": str(PEXELS_API_KEY).strip()}
-    clean_query = f"{query} -woman -girl -people -person"
-    params = {"query": clean_query, "orientation": "portrait", "per_page": 10}
+# ==========================================
+# 4. توليد المحتوى والسيو (باللغة الإنجليزية)
+# ==========================================
+def generate_seo_content(idea):
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    prompt = f"""
+    You are a Pinterest SEO expert.
+    I have this DIY electronics project idea: "{idea}".
+    Please write in English:
+    1. A catchy, highly clickable Pin Title.
+    2. A strong SEO-optimized description containing relevant keywords that electronics hobbyists search for (under 300 words).
+    3. 3 to 5 strong hashtags.
+    
+    Return ONLY a JSON response in this exact format (no markdown formatting or extra text):
+    {{"title": "Your Title Here", "description": "Description and hashtags here"}}
+    """
+    response = model.generate_content(prompt)
+    text = response.text.replace('```json', '').replace('```', '').strip()
+    data = json.loads(text)
+    
+    # الجملة التشجيعية باللغة الإنجليزية
+    call_to_action = "\n\n🔌 If you loved this project, make sure to follow our page for daily DIY electronics and tech inspiration!"
+    final_description = data["description"] + call_to_action
+    
+    return data["title"], final_description
 
-    try:
-        res = requests.get(url, headers=headers, params=params, timeout=20)
-        res.raise_for_status()
-        photos = res.json().get("photos", [])
-        
-        valid_photos = []
-        for photo in photos:
-            alt_text = photo.get("alt", "").lower()
-            if not any(bad_word in alt_text for bad_word in FORBIDDEN_WORDS):
-                valid_photos.append(photo["src"]["large2x"])
-
-        if valid_photos:
-            return random.choice(valid_photos)
-        elif photos:
-            return photos[0]["src"]["large2x"]
-    except Exception as e:
-        print(f"Pexels error: {e}")
-    return None
-
-def create_pin_via_session(title, description, image_url, link):
-    if not PINTEREST_SESS:
-        print("❌ Error: PINTEREST_SESSION_COOKIE is missing.")
-        return None
-
-    sess_cookie = PINTEREST_SESS.strip().strip('"').strip("'")
-    session = requests.Session()
-
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    })
-
-    session.cookies.set("_pinterest_sess", sess_cookie, domain=".pinterest.com", path="/")
-
-    try:
-        session.get("https://www.pinterest.com/", timeout=15)
-        csrf_val = session.cookies.get("csrftoken") or (PINTEREST_CSRF or "").strip()
-    except Exception:
-        csrf_val = (PINTEREST_CSRF or "").strip()
-
-    if not csrf_val:
-        csrf_val = "1234567890abcdef1234567890abcdef"
-        session.cookies.set("csrftoken", csrf_val, domain=".pinterest.com", path="/")
-
-    post_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Referer": "https://www.pinterest.com/pin-builder/",
-        "Origin": "https://www.pinterest.com",
-        "Accept": "application/json, text/javascript, */*, q=0.01",
-        "X-Requested-With": "XMLHttpRequest",
-        "X-Pinterest-AppState": "active",
-        "X-CSRFToken": csrf_val,
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+# ==========================================
+# 5. توليد الصورة
+# ==========================================
+def generate_image(idea, image_path="generated_pin.jpg"):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    
+    image_prompt = f"A highly detailed, aesthetic close-up photo of an electronic DIY project: {idea}. Cinematic lighting, cyberpunk vibes, high resolution, Pinterest style."
+    
+    payload = {
+        "instances": [{"prompt": image_prompt}],
+        "parameters": {"sampleCount": 1}
     }
+    
+    response = requests.post(url, headers=headers, json=payload)
+    response_data = response.json()
+    
+    if "predictions" in response_data:
+        import base64
+        image_bytes = base64.b64decode(response_data["predictions"][0]["bytesBase64Encoded"])
+        with open(image_path, "wb") as f:
+            f.write(image_bytes)
+        return image_path
+    else:
+        raise Exception(f"فشل توليد الصورة: {response_data}")
 
-    payload_data = {
-        "options": {
-            "board_id": str(PINTEREST_BOARD_ID).strip(),
-            "image_url": str(image_url).strip(),
-            "title": str(title).strip(),
-            "description": str(description).strip(),
-            "link": str(link).strip(),
-            "scrape_metric": {"source": "pinner_upload"}
+# ==========================================
+# 6. النشر على بنترست
+# ==========================================
+def upload_to_pinterest(title, description, image_path):
+    headers = {
+        "Authorization": f"Bearer {PINTEREST_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    media_url = "https://api.pinterest.com/v5/media"
+    media_response = requests.post(media_url, headers=headers, json={"media_type": "image"}).json()
+    
+    with open(image_path, 'rb') as f:
+        requests.post(media_response["upload_url"], data=media_response["upload_parameters"], files={'file': f})
+    
+    import base64
+    pin_payload = {
+        "board_id": PINTEREST_BOARD_ID,
+        "media_source": {
+            "source_type": "image_base64",
+            "content_type": "image/jpeg",
+            "data": base64.b64encode(open(image_path, "rb").read()).decode('utf-8')
         },
-        "context": {}
+        "title": title,
+        "description": description
     }
+    create_response = requests.post("https://api.pinterest.com/v5/pins", headers=headers, json=pin_payload)
+    return create_response.status_code == 201
 
-    data = {
-        "source_url": "/pin-builder/",
-        "data": json.dumps(payload_data)
-    }
-
-    endpoint = "https://www.pinterest.com/resource/PinResource/create/"
-
-    try:
-        res = session.post(endpoint, data=data, headers=post_headers, timeout=30)
-        res_json = res.json()
-        if res.status_code == 200 and "resource_response" in res_json:
-            if res_json.get("resource_response", {}).get("status") == "success":
-                return res_json["resource_response"]["data"]["id"]
-        print(f"Pinterest error response: {res_json}")
-    except Exception as e:
-        print(f"Network error on session: {e}")
-    return None
-
-def send_whatsapp_notification(title, pin_id):
-    if not (GREEN_API_INSTANCE_ID and GREEN_API_API_TOKEN and WHATSAPP_PHONE):
-        return
-    url = f"https://api.green-api.com/waInstance{GREEN_API_INSTANCE_ID}/sendMessage/{GREEN_API_API_TOKEN}"
-    chat_id = f"{WHATSAPP_PHONE}@c.us" if "@" not in str(WHATSAPP_PHONE) else str(WHATSAPP_PHONE)
-    pin_link = f"https://www.pinterest.com/pin/{pin_id}/"
-
-    msg = (
-        f"🚀 *تم نشر دبوس هاردوير من Google Sheets!*\n\n"
-        f"📌 *العنوان:* {title}\n"
-        f"🔗 *الرابط:* {pin_link}\n"
-        f"💰 *المنتج:* {PRODUCT_LINK}"
-    )
-    try:
-        requests.post(url, headers={"Content-Type": "application/json"}, json={"chatId": chat_id, "message": msg}, timeout=15)
-    except Exception:
-        pass
-
+# ==========================================
+# 7. التشغيل
+# ==========================================
 def main():
-    print("Starting Pinterest Sheet Automation Pipeline...")
-    
-    # 1. Fetch next pin from Google Sheet
-    sheet_data = get_pin_from_sheet()
-    
-    if sheet_data:
-        title = sheet_data.get("title")
-        desc = sheet_data.get("description")
-        search = sheet_data.get("search_query") or "electronics circuit board"
-        row_num = sheet_data.get("row")
-    else:
-        print("No item fetched from sheet. Stopping execution.")
-        return
-
-    print(f"Searching clean visual for: {search}...")
-    img = get_clean_pexels_image(search)
-    if not img:
-        img = get_clean_pexels_image("circuit board electronics")
-
-    if not img:
-        print("Skipping pin due to missing image asset.")
-        return
-
-    print(f"Publishing Pin: '{title}'...")
-    pin_id = create_pin_via_session(title, desc, img, PRODUCT_LINK)
-
-    if pin_id:
-        pin_url = f"https://www.pinterest.com/pin/{pin_id}/"
-        print(f"✅ Published successfully! Pin ID: {pin_id}")
+    try:
+        history = load_history()
         
-        # 2. Update Google Sheet status to Published
-        if row_num:
-            update_sheet_status(row_num, pin_url)
+        print("1. جاري ابتكار فكرة جديدة ومراجعة السجل...")
+        idea = generate_unique_idea(history)
+        print(f"الفكرة: {idea}")
+        
+        print("2. جاري كتابة المحتوى والسيو بالإنجليزية...")
+        title, description = generate_seo_content(idea)
+        
+        print("3. جاري توليد الصورة...")
+        image_path = generate_image(idea)
+        
+        print("4. جاري النشر على بنترست...")
+        success = upload_to_pinterest(title, description, image_path)
+        
+        if success:
+            save_to_history(idea) # حفظ الفكرة في السجل فقط إذا نجح النشر
+            print(f"✅ تم النشر بنجاح وتم تحديث السجل: {title}")
+        else:
+            print("❌ حدث خطأ أثناء النشر.")
             
-        send_whatsapp_notification(title, pin_id)
-    else:
-        print("❌ Failed to publish pin via session.")
+    except Exception as e:
+        print(f"❌ حدث خطأ: {e}")
 
 if __name__ == "__main__":
     main()
