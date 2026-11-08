@@ -49,8 +49,8 @@ def generate_unique_idea(history):
     Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
     """
     
-    # استخدام الإصدار الدقيق والمستقر 002
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key={GEMINI_API_KEY}"
+    # استخدام الموديل العالمي المفتوح للجميع gemini-pro
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
@@ -78,8 +78,8 @@ def generate_seo_content(idea):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
     
-    # استخدام الإصدار الدقيق والمستقر 002
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key={GEMINI_API_KEY}"
+    # استخدام الموديل العالمي المفتوح للجميع gemini-pro
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
