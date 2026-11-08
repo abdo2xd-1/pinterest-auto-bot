@@ -38,6 +38,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          touch history.txt
           git add history.txt
           git commit -m "Update history.txt with new generated pin" || echo "No changes to commit"
           git push
