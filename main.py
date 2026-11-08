@@ -1,7 +1,6 @@
 import os
 import json
 import random
-import time
 import requests
 
 # ==========================================
@@ -12,13 +11,6 @@ PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
 PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
 
 HISTORY_FILE = "history.txt"
-
-# قائمة الموديلات البديلة التي سيتم تجربتها تباعاً لتجنب الضغط (503)
-FALLBACK_MODELS = [
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.0-pro"
-]
 
 # ==========================================
 # 2. إدارة سجل الأفكار (History)
@@ -34,91 +26,59 @@ def save_to_history(idea):
         f.write(idea + "\n")
 
 # ==========================================
-# 3. إرسال الطلب مع تجنب الضغط (تغيير الموديل تلقائياً)
-# ==========================================
-def call_gemini_api(prompt):
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    for model in FALLBACK_MODELS:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-        try:
-            response = requests.post(url, headers=headers, json=payload)
-            data = response.json()
-            
-            if "candidates" in data:
-                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            elif "error" in data:
-                error_code = data["error"].get("code")
-                # إذا كان الخطأ بسبب الضغط (503)، ننتظر قليلاً أو نجرب موديل آخر
-                if error_code == 503:
-                    print(f"⚠️ الموديل {model} عليه ضغط عالي (503)، جاري تجربة موديل بديل...")
-                    continue
-                else:
-                    print(f"خطأ من الموديل {model}: {data['error'].get('message')}")
-        except Exception as e:
-            print(f"خطأ في الاتصال مع {model}: {e}")
-            
-        time.sleep(2) # انتظار قصير قبل تجربة الموديل التالي
-        
-    raise Exception("فشلت كل الموديلات بسبب الضغط العالي على سيرفرات جوجل. يرجى المحاولة لاحقاً.")
-
-# ==========================================
-# 4. ابتكار الفكرة برمجياً
+# 3. اختيار فكرة فريدة من القائمة الجاهزة (بدون أخطاء سيرفرات)
 # ==========================================
 def generate_unique_idea(history):
-    topics = [
-        "Arduino projects", "Raspberry Pi DIY", "Home Automation circuits", 
-        "LED Matrix displays", "Robotics and motors", "ESP32 IoT", 
-        "Vintage electronics repair", "PCB design aesthetic", 
-        "Soldering art", "Audio amplifiers DIY"
+    ideas_pool = [
+        "A cyberpunk glowing Arduino nano custom PCB board with neon LED traces",
+        "An aesthetic Raspberry Pi retro gaming console built inside an old cassette tape",
+        "A miniature DIY smart home automation hub with an OLED display and sensors",
+        "A custom mechanical keyboard switch tester with a digital voltage meter display",
+        "A glowing audio music spectrum analyzer VU meter using an ESP32 microchip",
+        "A vintage pocket radio circuit board restored with modern glowing components",
+        "A handmade portable soldering station with temperature control digital screen",
+        "A futuristic RGB LED matrix clock built on a transparent acrylic sheet",
+        "An IoT smart plant watering system circuit with moisture sensors and relays",
+        "A custom modular breadboard electronics prototype with glowing jumper wires"
     ]
-    random_topic = random.choice(topics)
-    recent_history = history[-50:] if history else []
-    history_text = "\n".join(recent_history)
     
-    prompt = f"""
-    You are a creative electronics engineer. Come up with a very specific, unique, and aesthetic DIY electronics project idea in the field of '{random_topic}'.
-    The idea must be highly visual and suitable for a Pinterest image.
-    Do NOT use any of these previously generated ideas:
-    {history_text}
+    # تصفية الأفكار غير المستخدمة سابقاً لتجنب التكرار
+    available_ideas = [idea for idea in ideas_pool if idea not in history]
     
-    Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
-    """
-    
-    return call_gemini_api(prompt)
+    if not available_ideas:
+        available_ideas = ideas_pool # إعادة استخدام القائمة لو نفذت
+        
+    selected_idea = random.choice(available_ideas)
+    return selected_idea
 
 # ==========================================
-# 5. توليد المحتوى والسيو
+# 4. توليد المحتوى والسيو (جاهز ومضمون)
 # ==========================================
 def generate_seo_content(idea):
-    prompt = f"""
-    You are a Pinterest SEO expert.
-    I have this DIY electronics project idea: "{idea}".
-    Please write in English:
-    1. A catchy, highly clickable Pin Title.
-    2. A strong SEO-optimized description containing relevant keywords that electronics hobbyists search for (under 300 words).
-    3. 3 to 5 strong hashtags.
+    titles = [
+        "Ultimate DIY Electronics Project You Must Try Today!",
+        "Incredible Cyberpunk Arduino Circuit Build & Setup",
+        "Amazing DIY Tech & Electronics Ideas for Makers",
+        "Build Your Own Smart Home Circuit Easily at Home",
+        "Top Aesthetic PCB & Microcontroller Project Inspiration"
+    ]
     
-    Return ONLY a JSON response in this exact format (no markdown formatting or extra text):
-    {{"title": "Your Title Here", "description": "Description and hashtags here"}}
-    """
+    title = random.choice(titles)
     
-    text = call_gemini_api(prompt)
-    text = text.replace('```json', '').replace('```', '').strip()
-    parsed_data = json.loads(text)
+    description = f"Discover how to build this amazing electronics project: {idea}. Perfect for hobbyists, makers, and DIY enthusiasts looking for cool tech inspiration.\n\n#DIYElectronics #ArduinoProject #TechMaker #SmartHome #ElectronicsHobby"
     
     call_to_action = "\n\n🔌 If you loved this project, make sure to follow our page for daily DIY electronics and tech inspiration!"
-    final_description = parsed_data["description"] + call_to_action
+    final_description = description + call_to_action
     
-    return parsed_data["title"], final_description
+    return title, final_description
 
 # ==========================================
-# 6. توليد الصورة
+# 5. توليد الصورة
 # ==========================================
 def generate_image(idea, image_path="generated_pin.jpg"):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
+    
     image_prompt = f"A highly detailed, aesthetic close-up photo of an electronic DIY project: {idea}. Cinematic lighting, cyberpunk vibes, high resolution, Pinterest style."
     
     payload = {
@@ -139,7 +99,7 @@ def generate_image(idea, image_path="generated_pin.jpg"):
         raise Exception(f"فشل توليد الصورة: {response_data}")
 
 # ==========================================
-# 7. النشر على بنترست
+# 6. النشر على بنترست
 # ==========================================
 def upload_to_pinterest(title, description, image_path):
     headers = {
@@ -168,17 +128,17 @@ def upload_to_pinterest(title, description, image_path):
     return create_response.status_code == 201
 
 # ==========================================
-# 8. التشغيل
+# 7. التشغيل
 # ==========================================
 def main():
     try:
         history = load_history()
         
-        print("1. جاري ابتكار فكرة جديدة ومراجعة السجل...")
+        print("1. جاري اختيار فكرة فريدة من القائمة وتجنب التكرار...")
         idea = generate_unique_idea(history)
         print(f"الفكرة: {idea}")
         
-        print("2. جاري كتابة المحتوى والسيو بالإنجليزية...")
+        print("2. جاري تجهيز عنوان السيو والوصف بالإنجليزية...")
         title, description = generate_seo_content(idea)
         
         print("3. جاري توليد الصورة...")
