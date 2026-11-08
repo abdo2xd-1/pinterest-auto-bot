@@ -4,10 +4,10 @@ import random
 import requests
 
 # ==========================================
-# 1. إعدادات المفاتيح
+# 1. إعدادات المفاتيح (تسحبهم من GitHub Secrets مباشرة)
 # ==========================================
-PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN")
-PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID")
+BUFFER_ACCESS_TOKEN = os.environ.get("BUFFER_ACCESS_TOKEN")
+BUFFER_PROFILE_ID = os.environ.get("BUFFER_PROFILE_ID")
 
 HISTORY_FILE = "history.txt"
 
@@ -49,7 +49,7 @@ def generate_unique_idea(history):
     return selected_idea
 
 # ==========================================
-# 4. توليد المحتوى والسيو (إنجليزي بالكامل)
+# 4. تجهيز المحتوى والسيو
 # ==========================================
 def generate_seo_content(idea):
     titles = [
@@ -61,42 +61,33 @@ def generate_seo_content(idea):
     ]
     
     title = random.choice(titles)
-    
-    description = f"Discover how to build this amazing electronics project: {idea}. Perfect for hobbyists, makers, and DIY enthusiasts looking for cool tech inspiration.\n\n#DIYElectronics #ArduinoProject #TechMaker #SmartHome #ElectronicsHobby"
-    
-    call_to_action = "\n\n🔌 If you loved this project, make sure to follow our page for daily DIY electronics and tech inspiration!"
-    final_description = description + call_to_action
-    
-    return title, final_description
+    description = f"{title}\n\nDiscover how to build this amazing electronics project: {idea}. Perfect for makers and DIY enthusiasts!\n\n#DIYElectronics #ArduinoProject #TechMaker #ElectronicsHobby"
+    return description
 
 # ==========================================
-# 5. النشر المباشر على بنترست (باستخدام رابط الصورة مباشرة)
+# 5. النشر عبر Buffer API الجديد باستخدام المفتاحين
 # ==========================================
-def upload_to_pinterest(title, description):
+def post_to_buffer(text_content):
+    create_url = "https://api.buffer.com/v1/posts"
     headers = {
-        "Authorization": f"Bearer {PINTEREST_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {BUFFER_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
     
-    # استخدام رابط صورة جاهز ومباشر لتجنب أي مشاكل في الرفع
-    image_url = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
-    
-    pin_payload = {
-        "board_id": PINTEREST_BOARD_ID,
-        "media_source": {
-            "source_type": "image_url",
-            "url": image_url
-        },
-        "title": title,
-        "description": description
+    payload = {
+        "channelId": BUFFER_PROFILE_ID,
+        "text": text_content,
+        "media": {
+            "photo": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
+        }
     }
     
-    create_response = requests.post("https://api.pinterest.com/v5/pins", headers=headers, json=pin_payload)
+    response = requests.post(create_url, headers=headers, json=payload)
     
-    if create_response.status_code == 201:
+    if response.status_code in [200, 201]:
         return True
     else:
-        print(f"تفاصيل خطأ بنترست: {create_response.text}")
+        print(f"تفاصيل خطأ النشر في Buffer: {response.text}")
         return False
 
 # ==========================================
@@ -104,23 +95,27 @@ def upload_to_pinterest(title, description):
 # ==========================================
 def main():
     try:
+        if not BUFFER_PROFILE_ID:
+            print("❌ تنبيه: مفتاح BUFFER_PROFILE_ID غير موجود في الـ Secrets!")
+            return
+            
         history = load_history()
         
-        print("1. جاري اختيار فكرة فريدة من القائمة وتجنب التكرار...")
+        print("1. جاري اختيار الفكرة وتجنب التكرار...")
         idea = generate_unique_idea(history)
         print(f"الفكرة: {idea}")
         
-        print("2. جاري تجهيز عنوان السيو والوصف بالإنجليزية...")
-        title, description = generate_seo_content(idea)
+        print("2. جاري تجهيز المنشور والسيو...")
+        post_text = generate_seo_content(idea)
         
-        print("3. جاري النشر المباشر على بنترست...")
-        success = upload_to_pinterest(title, description)
+        print("3. جاري الإرسال عبر Buffer API الجديد للقناة المحددة...")
+        success = post_to_buffer(post_text)
         
         if success:
             save_to_history(idea)
-            print(f"✅ تم النشر بنجاح وتم تحديث السجل: {title}")
+            print("✅ تم إرسال المنشور إلى Buffer بنجاح!")
         else:
-            print("❌ حدث خطأ أثناء النشر على بنترست.")
+            print("❌ حدث خطأ أثناء النشر عبر Buffer.")
             
     except Exception as e:
         print(f"❌ حدث خطأ: {e}")
