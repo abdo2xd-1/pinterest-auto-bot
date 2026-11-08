@@ -51,9 +51,9 @@ def generate_unique_idea(history):
     Write the idea in exactly one short English sentence (under 15 words) ready to be used as an image generation prompt.
     """
     
-    # تم التعديل إلى الموديل المستقر
+    # تم التحديث إلى gemini-2.0-flash
     response = client.models.generate_content(
-        model='gemini-1.5-flash',
+        model='gemini-2.0-flash',
         contents=prompt
     )
     return response.text.strip()
@@ -74,9 +74,9 @@ def generate_seo_content(idea):
     {{"title": "Your Title Here", "description": "Description and hashtags here"}}
     """
     
-    # تم التعديل إلى الموديل المستقر
+    # تم التحديث إلى gemini-2.0-flash
     response = client.models.generate_content(
-        model='gemini-1.5-flash',
+        model='gemini-2.0-flash',
         contents=prompt
     )
     
