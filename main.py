@@ -1,10 +1,12 @@
 import os
 import json
 import random
+import requests
 
 # ==========================================
-# 1. إعدادات الملفات
+# 1. إعدادات المفاتيح بالطريقة القديمة
 # ==========================================
+BUFFER_ACCESS_TOKEN = os.environ.get("BUFFER_ACCESS_TOKEN")
 HISTORY_FILE = "history.txt"
 
 # ==========================================
@@ -21,7 +23,7 @@ def save_to_history(idea):
         f.write(idea + "\n")
 
 # ==========================================
-# 3. اختيار فكرة فريدة من القائمة الجاهزة
+# 3. ابتكار واختيار الفكرة
 # ==========================================
 def generate_unique_idea(history):
     ideas_pool = [
@@ -58,10 +60,46 @@ def generate_seo_content(idea):
     
     title = random.choice(titles)
     description = f"{title}\n\nDiscover how to build this amazing electronics project: {idea}. Perfect for makers and DIY enthusiasts!\n\n#DIYElectronics #ArduinoProject #TechMaker #ElectronicsHobby"
-    return title, description
+    return description
 
 # ==========================================
-# 5. التشغيل والتأكيد
+# 5. النشر بالطريقة الكلاسيكية عبر Buffer القديم
+# ==========================================
+def post_to_buffer_classic(text_content):
+    # الخطوة أ: جلب القنوات المتاحة بالطريقة الكلاسيكية
+    profiles_url = f"https://api.bufferapp.com/1/profiles.json?access_token={BUFFER_ACCESS_TOKEN}"
+    profiles_resp = requests.get(profiles_url)
+    
+    if profiles_resp.status_code != 200:
+        print(f"خطأ في جلب القنوات من بافر: {profiles_resp.text}")
+        return False
+        
+    profiles = profiles_resp.json()
+    if not profiles or not isinstance(profiles, list):
+        print("❌ لم يتم العثور على قنوات مرتبطة بحساب بافر.")
+        return False
+        
+    profile_id = profiles[0]["id"]
+    
+    # الخطوة ب: إرسال البوست بالطريقة القديمة والمباشرة
+    update_url = "https://api.bufferapp.com/1/updates/create.json"
+    payload = {
+        "access_token": BUFFER_ACCESS_TOKEN,
+        "profile_ids[]": profile_id,
+        "text": text_content,
+        "media[photo]": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1080&q=80"
+    }
+    
+    response = requests.post(update_url, data=payload)
+    
+    if response.status_code == 200 and response.json().get("success"):
+        return True
+    else:
+        print(f"تفاصيل خطأ النشر: {response.text}")
+        return False
+
+# ==========================================
+# 6. التشغيل
 # ==========================================
 def main():
     try:
@@ -72,12 +110,16 @@ def main():
         print(f"الفكرة: {idea}")
         
         print("2. جاري تجهيز المنشور والسيو...")
-        title, description = generate_seo_content(idea)
-        print(f"العنوان: {title}")
+        post_text = generate_seo_content(idea)
         
-        # حفظ الفكرة في السجل لضمان عدم تكرارها مستقبلاً
-        save_to_history(idea)
-        print("✅ تم معالجة الفكرة وحفظها في السجل بنجاح تام بدون أخطاء!")
+        print("3. جاري الإرسال بالطريقة الكلاسيكية إلى Buffer...")
+        success = post_to_buffer_classic(post_text)
+        
+        if success:
+            save_to_history(idea)
+            print("✅ تم النشر بنجاح وتم تحديث السجل!")
+        else:
+            print("❌ حدث خطأ أثناء النشر.")
             
     except Exception as e:
         print(f"❌ حدث خطأ: {e}")
